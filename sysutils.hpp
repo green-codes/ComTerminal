@@ -19,7 +19,7 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
   // set up vars
   int pos = default_pos;
   char sel_buf[4] = {};
-  uint8_t sel_pos = 0;
+  byte sel_pos = 0;
 
   // loop
   while (true)
@@ -71,8 +71,8 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
 }
 
 /* buffered editor: safely view and edit buffers */
-int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
-                    uint8_t ed_mode, const char *prompt)
+int buffered_editor(char *in_buf, int bufsize, byte read_only,
+                    byte ed_mode, const char *prompt)
 {
   // param check
   if (bufsize == 0) // no known buffer length, use first null (dangerous?)
@@ -86,40 +86,60 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
   char *buf;
   if (read_only)
     buf = in_buf;
-  else
+  else // copy contents from in_buf
   {
     buf = (char *)calloc(bufsize + 1, 1); // staging buffer w/null
-    strncpy(buf, in_buf, bufsize);
+    if (ED_MODES[ed_mode] == 'F')
+      memcpy(buf, in_buf, bufsize);
+    else
+      strncpy(buf, in_buf, bufsize); // won't copy after first null
   }
 
   // viewing mode vars
-  uint8_t fullscreen = 0; // available in viewing only
-  uint8_t hex = 0;        // hex display
+  bool fullscreen = 0; // available in viewing only
+  bool hex = 0;        // hex display
   // input mode vars
-  uint8_t input_method = 0; // input method (D/H/K/A)
-  uint8_t iw_mode = 0;      // input mode (Insert/Replace)
-  uint8_t shift = 0;        // 0 for off, 1 for on
+  byte input_method = 0; // input method (D/H/K/A)
+  byte iw_mode = 0;      // input mode (Insert/Replace)
+  bool shift = 0;        // 0 for off, 1 for on
   char ascii_buf[4] = {};
-  uint8_t ascii_count = 0; // buf for ASCII mode
+  byte ascii_count = 0; // buf for ASCII mode
   char ch = 0;
   // common vars
-  uint8_t editing = 0;                         // editing?
+  bool editing = 0;                            // editing?
   int d_root = 0, d_pos[2] = {0, 0}, d_offset; // screen and cursor positions
-  uint8_t row_size = hex ? D_COLS / 3 : D_COLS;
-  uint8_t num_rows = fullscreen && !editing ? D_ROWS : D_ROWS - 1;
 
   // loop until command to exit
   while (true)
   {
-    // if not in force mode, cut bufsize to first null
-    bufsize = (ED_MODES[ed_mode] == 'F') ? bufsize : strlen(buf);
-    // catch d_root < 0
-    d_root = (d_root < 0) ? 0 : d_root;
+    byte num_rows = (fullscreen && !editing) ? D_ROWS : D_ROWS - 1;
+    byte row_size = hex ? D_COLS / 3 - 1 : D_COLS;
+    d_root = (d_root < 0) ? 0 : d_root; // catch d_root < 0
+    int buf_eof = (ED_MODES[ed_mode] == 'F') ? bufsize : strlen(buf);
+
+    /*===== handle cursor =====*/
+    // catch case: cursor out of window
+    if (d_pos[0] >= row_size)
+      d_pos[0] = row_size - 1;
+    if (d_pos[1] >= num_rows)
+      d_pos[1] = num_rows - 1;
+    // catch case: cursor past end of buffer
+    if (d_root + d_pos[1] * row_size + d_pos[0] > buf_eof)
+    {
+      // 1-line mode
+      if (num_rows == 1)
+        d_pos[0] = buf_eof - d_root;
+      else
+      {
+        d_pos[1] = (buf_eof - d_root) / row_size;
+        d_pos[0] = (buf_eof - d_root) % row_size;
+      }
+    }
+    d_offset = d_root + d_pos[1] * row_size + d_pos[0];
 
     /*===== handle display =====*/
     lcd.clear();
     lcd.blink();
-    d_offset = d_root + d_pos[1] * row_size + d_pos[0];
     // print buffer section
     if (hex) // hex mode
     {
@@ -129,13 +149,14 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
         // line wrap and print byte count
         if (i % row_size == 0)
         {
-          lcd.setCursor(0, line_count++);
+          lcd.setCursor(0, line_count);
           char temp[4] = "";
-          sprintf(temp, "%.3d", d_root);
+          sprintf(temp, "%.3d", d_root + line_count * row_size);
           lcd.print(temp); // count
+          line_count++;
         }
         lcd.print(' ');
-        hex_print(buf[i]);
+        hex_print(buf[d_root + i]);
       }
     }
     else // text mode
@@ -145,27 +166,26 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
         print_num = num_rows * row_size;
       else
         print_num = bufsize - d_root;
-      print_lines(buf + d_root, print_num,
-                  ED_MODES[ed_mode] == 'F', num_rows, 0);
+      print_lines(buf + d_root, print_num, ED_MODES[ed_mode] == 'F',
+                  num_rows, row_size, 0);
     }
     // print status line if not full screen
     if (!fullscreen)
     {
       lcd.setCursor(0, D_ROWS - 1);
-      if (editing) // editind mode status line
+      if (prompt)
+        lcd.print(prompt);
+      else
       {
-        // display prompt
-        if (prompt)
-          lcd.print((const char *)prompt);
-        else
-        {
-          lcd.print(IW_MODES[iw_mode]);
-          lcd.print(':');
-          // cursor position / bufsize
-          lcd.print(d_offset);
-          lcd.print('/');
-          lcd.print(bufsize);
-        }
+        lcd.print(editing ? IW_MODES[iw_mode] : ED_MODES[ed_mode]);
+        lcd.print(':');
+        // print counter
+        lcd.print(d_offset);
+        lcd.print('/');
+        lcd.print(buf_eof);
+      }
+      if (editing) // editing mode
+      {
         // handle ASCII mode displays
         if (IW_INPUT_METHODS[input_method] == 'A')
         {
@@ -179,25 +199,14 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
         lcd.print(IW_INPUT_METHODS[input_method]); // input method
         shift ? lcd.print('S') : lcd.print(' ');   // shift on/off
         // full buffer alert
-        if (d_offset == bufsize)
+        if (buf_eof == bufsize)
         {
           lcd.setCursor(D_COLS - 2, D_ROWS - 1);
           lcd.print('!');
         }
-        lcd.setCursor(d_pos[0], d_pos[1]);
       }
-      else // view mode status line
+      else // viewing mode status line
       {
-        // print prompt
-        if (prompt)
-          lcd.print(prompt);
-        else
-          lcd.print(ED_MODES[ed_mode]);
-        lcd.print(':');
-        // print counter
-        lcd.print(d_offset);
-        lcd.print('/');
-        lcd.print(bufsize);
         // display ASCII for the current byte
         lcd.setCursor(D_COLS - 4, D_ROWS - 1);
         lcd.print("0x");
@@ -205,20 +214,6 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
       }
     }
 
-    /*===== handle cursor =====*/
-    // catch case: cursor out of window
-    if (d_pos[0] >= row_size)
-      d_pos[0] = row_size - 1;
-    if (d_pos[1] >= num_rows)
-      d_pos[1] = num_rows - 1;
-    // catch case: cursor past end of buffer
-    if (D_ROWS == 2 && d_pos[0] > bufsize - d_root) // 1-line mode
-      d_pos[0] = bufsize - d_root;
-    else if (bufsize - 1 - d_root < d_pos[1] * row_size + d_pos[0])
-    { // multiple lines: just put the cursor at the right place
-      d_pos[1] = (bufsize - 1 - d_root) / row_size;
-      d_pos[0] = (bufsize - d_root) % row_size;
-    }
     // set cursor
     if (hex)
       lcd.setCursor(3 * d_pos[0] + 4, d_pos[1]);
@@ -235,7 +230,7 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
       // TODO: add clearing editor buffer as menu item
       switch (menu(ED_MENU, ED_MENU_LEN, 0, NULL))
       {
-      case 0: // Edit from cursor position
+      case 0: // save: dump buf to in_buf
       {
         memcpy(in_buf, buf, bufsize);
         free(buf);
@@ -252,18 +247,8 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
           char op_buf[2] = {};
           simple_input(op_buf, 1, "Force?", false);
           (strtol(op_buf, NULL, 10)) ? ed_mode = 1 : ed_mode = 0;
-          lcd.clear();
-          lcd.print(ed_mode);
         }
-        else if (s == 1)
-        {
-          char op_buf[2] = {};
-          simple_input(op_buf, 1, "0-Fill?", false);
-          (strtol(op_buf, NULL, 10)) ? iw_mode = 1 : iw_mode = 0;
-          lcd.clear();
-          lcd.print(iw_mode);
-        }
-        delay(1000);
+        // TODO
         break;
       }
       case 3:
@@ -281,13 +266,13 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
     else if (ch == ED_EDIT_KEY) // switch b/w editing and viewing
     {
       editing = editing ? 0 : 1;
+      fullscreen = editing ? 0 : fullscreen;
     }
 
     // view/edit-specific commands
     else if (editing) // editing mode
     {
       /*===== handle control chars =====*/
-      ch = keypad_in();
       if (ch == IW_MODE_KEY)
       {
         if (input_method == sizeof(IW_INPUT_METHODS) - 1)
@@ -310,15 +295,55 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
         {
           memmove(buf + d_offset - 1, buf + d_offset, bufsize - d_offset);
           buf[bufsize - 1] = 0; // null term
+          // handle cursor
+          if (d_pos[0] > 0) // move cursor left
+            d_pos[0]--;
+          else if (num_rows == 1 && d_root > 0) // 2-line display, scroll left
+            d_root--;
+          else // display has more than 2 lines, scroll up
+          {
+            if (d_pos[1] > 0) // not yet on first line
+            {
+              d_pos[0] = row_size - 1;
+              d_pos[1]--;
+            }
+            else if (d_root >= row_size) // try scrolling up
+            {
+              d_pos[0] = row_size - 1;
+              d_root -= row_size;
+            }
+            else if (d_root > 0)
+              d_root--;
+          }
         }
         else if (IW_MODES[iw_mode] == 'R') // replace mode
-          buf[d_offset] = ' ';             // use ASCII input for nulls.
+          buf[d_offset] = (d_offset == buf_eof - 1) ? 0 : ' ';
       }
 
       /*===== handle input to buf =====*/
+      // TODO: handle Insert mode
       // Note: catch non-digit characters; catch buffer overflow
-      else if (d_offset < bufsize && isdigit(ch))
+      else if (buf_eof < bufsize && isdigit(ch))
       {
+        // shift buffer after insertion point
+        if (IW_MODES[iw_mode] == 'I' && buf_eof < bufsize)
+        {
+          memmove(buf + d_offset + 1, buf + d_offset, bufsize - d_offset - 1);
+          if (d_pos[0] < row_size - 1 && d_offset < buf_eof) // move cursor right
+            d_pos[0]++;
+          else if (num_rows == 1 && d_root + row_size <= buf_eof) // 2-line
+            d_root++;
+          else if (d_pos[1] < num_rows - 1) // not yet on bottom line
+          {
+            d_pos[0] = 0;
+            d_pos[1]++;
+          }
+          else if (d_root + num_rows * row_size <= buf_eof) // scroll down
+          {
+            d_pos[0] = 0;
+            d_root += row_size;
+          }
+        }
 
         if (IW_INPUT_METHODS[input_method] == 'D') // Decimal-Calculator Mode
         {
@@ -402,7 +427,7 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
     else // viewing mode
     {
       if (ch == VW_MODE_KEY) // switch between normal and fullscreen
-        fullscreen = fullscreen ? 0 : 1;
+        fullscreen = fullscreen ? 0 : editing ? 0 : 1;
       else if (ch == VW_HEX_KEY) // switch between text and hex modes
         hex = hex ? 0 : 1;
       else if (ch == VW_HOME_KEY)
@@ -413,12 +438,9 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
       }
       else if (ch == VW_END_KEY)
       {
-        d_root = ((bufsize - 1) / row_size) * row_size;
-        d_pos[0] = (bufsize - 1) % row_size;
-        if (num_rows * row_size - 1 < bufsize - d_root) // out of window
-          d_pos[1] = num_rows - 1;
-        else // end of buffer within window
-          d_pos[1] = (bufsize - d_root - 1) / row_size;
+        d_root = (buf_eof / row_size) * row_size;
+        d_pos[0] = buf_eof % row_size;
+        d_pos[1] = (buf_eof - d_root) / row_size;
       }
       else if (ch == VW_LEFT_KEY)
       {
@@ -444,16 +466,16 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
       }
       else if (ch == VW_RIGHT_KEY)
       {
-        if (d_pos[0] < row_size - 1 && d_offset <= bufsize) // move cursor right
+        if (d_pos[0] < row_size - 1 && d_offset < buf_eof) // move cursor right
           d_pos[0]++;
-        else if (num_rows == 1 && bufsize - d_root > row_size) // 2-line display
+        else if (num_rows == 1 && d_root + row_size <= buf_eof) // 2-line
           d_root++;
         else if (d_pos[1] < num_rows - 1) // not yet on bottom line
         {
           d_pos[0] = 0;
           d_pos[1]++;
         }
-        else if (bufsize - d_root > num_rows * row_size) // scroll down
+        else if (d_root + num_rows * row_size <= buf_eof) // scroll down
         {
           d_pos[0] = 0;
           d_root += row_size;
@@ -478,15 +500,16 @@ int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
       {
         if (d_pos[1] < num_rows - 1) // not on the bottom row
           d_pos[1]++;
-        else // on the bottom line
+        else // on the bottom row
         {
-          if (d_root + row_size < bufsize - 1) // more buffer below
+          if (d_root + row_size <= buf_eof) // more buffer below
             d_root += row_size;
           else
-            d_pos[0] = row_size - 1; // move to end of last line
+            //d_pos[0] = buf_eof - d_root; // move to end
+            d_pos[0] = row_size - 1;
         }
       }
-      // ignore other keys
+      // will handle the cursor on next loop
 
     } // end viewing command handling
 
@@ -554,17 +577,17 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
 }
 
 // print lines
-void print_lines(char *const buf, int bufsize, uint8_t force,
-                 int num_rows, int start_row)
+void print_lines(char *const buf, int bufsize, byte force,
+                 int num_rows, int row_size, int start_row)
 {
   if (!force) // if not in force mode, cut bufsize to first null
     bufsize = strlen(buf);
   int row_count = 0;
   // print num_lines or until end of buf
-  for (int i = 0; i < bufsize && i < num_rows * D_COLS; i++)
+  for (int i = 0; i < bufsize && i < num_rows * row_size; i++)
   {
     // line wrap
-    if (i % D_COLS == 0)
+    if (i % row_size == 0)
       lcd.setCursor(0, start_row + row_count++);
     // print character
     if (force && buf[i] == 0) // if force, substitute nulls with spaces
@@ -573,9 +596,9 @@ void print_lines(char *const buf, int bufsize, uint8_t force,
       lcd.write(buf[i]);
   }
 }
-void print_line(char *const buf, uint8_t force, int start_row)
+void print_line(char *const buf, byte force, int start_row)
 {
-  print_lines(buf, D_COLS, force, 1, start_row);
+  print_lines(buf, D_COLS, force, 1, D_COLS, start_row);
 }
 
 // TODO: fancy view
@@ -624,7 +647,7 @@ void fancy_print(const double num)
 void hex_print(const char data)
 {
   char temp[2];
-  sprintf(temp, "%.2x", (uint8_t)data);
+  sprintf(temp, "%.2x", (byte)data);
   lcd.print(temp);
 }
 void hex_print(const char *data, int num)

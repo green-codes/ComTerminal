@@ -95,7 +95,7 @@ const char *ED_MENU[] = {
 const int ED_SETTINGS_LEN = 2;
 const char *ED_SETTINGS[] = {
     "Force Display?",
-    "Edit 0-Fill?"};
+};
 const char ED_MENU_KEY = 'C';
 const char ED_EXIT_KEY = 'D';
 const char ED_EDIT_KEY = '#';
@@ -177,7 +177,7 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
 
 // print lines to LCD from buffer
 void print_lines(char *const buf, int bufsize, uint8_t force,
-                 int num_lines, int start_row);
+                 int num_lines, int row_size, int start_row);
 
 // simple message display
 void print_message(const char *buf, int message_delay);

@@ -68,13 +68,12 @@ void setup()
 /*===== Main Loop =====*/
 void loop()
 {
-
   // menu
   //int m_res = menu(MAIN_MENU, MAIN_MENU_LEN, 0, NULL);
 
   // buffered_editor
-  char view1[] = "Ministry of Arcane Sciences, United Equestria.";
-  int v_res = buffered_editor(view1, 0, 0, 0, NULL);
+  char view1[DEFAULT_BUFSIZE] = "Ministry of Arcane Sciences, United Equestria.";
+  int v_res = buffered_editor(view1, DEFAULT_BUFSIZE, 0, 0, NULL);
 
   print_message(view1, 1000);
 }
