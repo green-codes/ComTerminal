@@ -2,21 +2,19 @@
    Main file for the DSKY project; using serial input for now in place
    of the matrix keypad.
 
-   TODO: REALLY messy code; clean up when possible
 */
 
-// include the library code:
-#include "ComTerminal.hpp"
+#include "ComTerminal.h"
+#include "data.h"
 #include "sysutils.hpp"
 #include "functions.hpp"
-#include "data.h"
 
 /*===== Init =====*/
 void setup()
 {
 
   // set up outputs
-  lcd.begin(d_cols, d_rows);
+  lcd.begin(D_COLS, D_ROWS);
   if (serial)
   {
     Serial.begin(9600);
@@ -27,18 +25,14 @@ void setup()
   if (reset_conf)
   { // reset; read from default and write to flash
     EEPROM.format();
-    conf = new ct_config; // Note: config_len always even
-    ee_write(config_address, (byte *)conf, config_len);
+    conf = new CT_Config; // Note: CONFIG_LEN always even
+    ee_write(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
   }
   else
   {                                         // read from flash into memory
-    conf = (ct_config *)malloc(config_len); // allocate on heap!
-    ee_read(config_address, (byte *)conf, config_len);
+    conf = (CT_Config *)malloc(CONFIG_LEN); // allocate on heap!
+    ee_read(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
   }
-
-  // LCD backlight
-  pinMode(backlight_pin, OUTPUT);
-  digitalWrite(backlight_pin, (conf->lcd_backlight) ? HIGH : LOW);
 
   // Print welcome message and request password
   if (conf->splash)
@@ -77,11 +71,11 @@ void loop()
 {
 
   // menu
-  //int m_res = menu(main_menu, main_menu_len, 0, NULL);
+  //int m_res = menu(MAIN_MENU, MAIN_MENU_LEN, 0, NULL);
 
   // view
   char view1[] = "Ministry of Arcane Sciences, United Equestria.";
-  int v_res = view_window(view1, 0, 0, 0, NULL);
+  int v_res = buffered_editor(view1, 0, 0, 0, NULL);
 
   // input
   char input[64] = "";
