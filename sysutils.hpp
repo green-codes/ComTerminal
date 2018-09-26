@@ -71,24 +71,27 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
 }
 
 /* buffered editor: safely view and edit buffers */
-int buffered_editor(char *buf, int bufsize, uint8_t read_only,
+int buffered_editor(char *in_buf, int bufsize, uint8_t read_only,
                     uint8_t ed_mode, const char *prompt)
 {
   // param check
   if (bufsize == 0) // no known buffer length, use first null (dangerous?)
-    bufsize = strlen(buf);
-  if (!buf || bufsize < 1) // bad buffer args, return error
+    bufsize = strlen(in_buf);
+  if (!in_buf || bufsize < 1) // bad buffer args, return error
     return -2;
   if (bufsize > MAX_BUFSIZE) // trim bufsize to MAX_BUFSIZE to (try to) avoid
     bufsize = MAX_BUFSIZE;   // memory overflow (using staged buffer)
 
   // create and init staged buffer
-  char *in_buf = (char *)calloc(bufsize + 1, 1); // staging buffer w/null
-  strncpy(in_buf, buf, bufsize);
+  char *buf;
+  if (read_only)
+    buf = in_buf;
+  else
+  {
+    buf = (char *)calloc(bufsize + 1, 1); // staging buffer w/null
+    strncpy(buf, in_buf, bufsize);
+  }
 
-  // common vars
-  uint8_t editing = 0;               // editing?
-  int d_root = 0, d_pos[2] = {0, 0}; // screen and cursor positions
   // viewing mode vars
   uint8_t fullscreen = 0; // available in viewing only
   uint8_t hex = 0;        // hex display
@@ -99,21 +102,24 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
   char ascii_buf[4] = {};
   uint8_t ascii_count = 0; // buf for ASCII mode
   char ch = 0;
+  // common vars
+  uint8_t editing = 0;                         // editing?
+  int d_root = 0, d_pos[2] = {0, 0}, d_offset; // screen and cursor positions
+  uint8_t row_size = hex ? D_COLS / 3 : D_COLS;
+  uint8_t num_rows = fullscreen && !editing ? D_ROWS : D_ROWS - 1;
 
   // loop until command to exit
   while (true)
   {
     // if not in force mode, cut bufsize to first null
     bufsize = (ED_MODES[ed_mode] == 'F') ? bufsize : strlen(buf);
-
     // catch d_root < 0
     d_root = (d_root < 0) ? 0 : d_root;
 
     /*===== handle display =====*/
     lcd.clear();
     lcd.blink();
-    uint8_t row_size = hex ? D_COLS / 3 : D_COLS;
-    uint8_t num_rows = fullscreen && !editing ? D_ROWS : D_ROWS - 1;
+    d_offset = d_root + d_pos[1] * row_size + d_pos[0];
     // print buffer section
     if (hex) // hex mode
     {
@@ -134,7 +140,7 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
     }
     else // text mode
     {
-      int print_num;
+      int print_num; // catch print_num overflow
       if (bufsize - d_root > num_rows * row_size)
         print_num = num_rows * row_size;
       else
@@ -148,31 +154,32 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
       lcd.setCursor(0, D_ROWS - 1);
       if (editing) // editind mode status line
       {
+        // display prompt
         if (prompt)
-          lcd.print((const char *)prompt); // if given prompt
+          lcd.print((const char *)prompt);
         else
         {
-          // input mode
           lcd.print(IW_MODES[iw_mode]);
           lcd.print(':');
           // cursor position / bufsize
-          lcd.print(d_root + d_pos[1] * row_size + d_pos[0]);
+          lcd.print(d_offset);
           lcd.print('/');
           lcd.print(bufsize);
         }
-        // input mode information
-        if (IW_INPUT_METHODS[mode] == 'A')
-        { // handle ASCII mode displays
+        // handle ASCII mode displays
+        if (IW_INPUT_METHODS[input_method] == 'A')
+        {
           lcd.setCursor(D_ROWS - 6, D_COLS - 1);
           lcd.print("0x__");
           lcd.setCursor(D_ROWS - 4, D_COLS - 1);
           lcd.print(ascii_buf);
         }
+        // IM and shift on/off displays
         lcd.setCursor(D_COLS - 2, D_ROWS - 1);
-        lcd.print(IW_INPUT_METHODS[mode]);       // input method
-        shift ? lcd.print('S') : lcd.print(' '); // shift on/off
+        lcd.print(IW_INPUT_METHODS[input_method]); // input method
+        shift ? lcd.print('S') : lcd.print(' ');   // shift on/off
         // full buffer alert
-        if (d_root + d_pos[1] * row_size + d_pos[0] == bufsize)
+        if (d_offset == bufsize)
         {
           lcd.setCursor(D_COLS - 2, D_ROWS - 1);
           lcd.print('!');
@@ -188,13 +195,13 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
           lcd.print(ED_MODES[ed_mode]);
         lcd.print(':');
         // print counter
-        lcd.print(d_root + d_pos[1] * row_size + d_pos[0] + 1);
+        lcd.print(d_offset);
         lcd.print('/');
         lcd.print(bufsize);
         // display ASCII for the current byte
-        lcd.setCursor(12, 0);
+        lcd.setCursor(D_COLS - 4, D_ROWS - 1);
         lcd.print("0x");
-        hex_print((byte)buf[d_root + d_pos[0]]);
+        hex_print(buf[d_offset]);
       }
     }
 
@@ -221,124 +228,143 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
     /*===== handle commands =====*/
     char ch = keypad_in();
 
-    if (editing) // editing mode
+    // general commands
+    if (ch == ED_MENU_KEY)
+    {
+      // TODO: add menu
+      // TODO: add clearing editor buffer as menu item
+      switch (menu(ED_MENU, ED_MENU_LEN, 0, NULL))
+      {
+      case 0: // Edit from cursor position
+      {
+        memcpy(in_buf, buf, bufsize);
+        free(buf);
+        return 0;
+      }
+      case 1: // edit entire buffer
+        // TODO
+        break;
+      case 2: // settings
+      {
+        int s = menu(ED_SETTINGS, ED_SETTINGS_LEN, 0, "Settings ");
+        if (s == 0)
+        {
+          char op_buf[2] = {};
+          simple_input(op_buf, 1, "Force?", false);
+          (strtol(op_buf, NULL, 10)) ? ed_mode = 1 : ed_mode = 0;
+          lcd.clear();
+          lcd.print(ed_mode);
+        }
+        else if (s == 1)
+        {
+          char op_buf[2] = {};
+          simple_input(op_buf, 1, "0-Fill?", false);
+          (strtol(op_buf, NULL, 10)) ? iw_mode = 1 : iw_mode = 0;
+          lcd.clear();
+          lcd.print(iw_mode);
+        }
+        delay(1000);
+        break;
+      }
+      case 3:
+        lcd.noBlink();
+        free(buf);
+        return -2;
+      }
+    }
+    else if (ch == ED_EXIT_KEY)
+    {
+      lcd.noBlink();
+      free(buf);
+      return -2;
+    }
+    else if (ch == ED_EDIT_KEY) // switch b/w editing and viewing
+    {
+      editing = editing ? 0 : 1;
+    }
+
+    // view/edit-specific commands
+    else if (editing) // editing mode
     {
       /*===== handle control chars =====*/
       ch = keypad_in();
       if (ch == IW_MODE_KEY)
       {
-        // only Dec and Hex modes in Numeric mode
-        if (iw_mode == 2)
-          mode = (mode) ? 0 : 1;
+        if (input_method == sizeof(IW_INPUT_METHODS) - 1)
+          input_method = 0;
         else
-          (mode == sizeof(IW_INPUT_METHODS) - 1) ? mode = 0 : mode++;
+          input_method++;
       }
       else if (ch == IW_SHIFT_KEY)
       {
         shift = shift ? 0 : 1;
         continue; // don't reset ascii buffer
       }
-      else if (ch == IW_CLEAR_KEY)
-      {
-        memset(in_buf, 0, bufsize); // clear input buffer
-        d_root = 0;
-        d_pos = 0;
-        lcd.setCursor(0, 1);
-        lcd.print("                ");
-        lcd.setCursor(0, 1);
-      }
-      else if (ch == IW_EXIT_KEY)
-      {
-        lcd.noBlink();
-        free(in_buf);
-        return -1;
-      }
+
       else if (ch == IW_DEL_KEY)
       {
-        // Note: case to clear ASCII mode buffer on press
-        if (IW_INPUT_METHODS[mode] == 'A' && ascii_count > 0)
-          ; //nop
-        else if (d_root > 0)
-        {                            // prevent reverse overflow
-          in_buf[--d_root] = 0;      // erase last character in in_buf
-          lcd.setCursor(--d_pos, 1); // go back 1 position
-          lcd.print(' ');
-          lcd.setCursor(d_pos, 1);
+        // Note: case to clear ASCII mode buffer (at end of loop)
+        if (IW_INPUT_METHODS[input_method] == 'A' && ascii_count > 0)
+          (void)0;
+        else if (IW_MODES[iw_mode] == 'I' && d_offset > 0) // insert mode
+        {
+          memmove(buf + d_offset - 1, buf + d_offset, bufsize - d_offset);
+          buf[bufsize - 1] = 0; // null term
         }
-      }
-      else if (ch == IW_ENTER_KEY)
-      {
-        if (iw_mode == 0)
-          strncpy(buf, in_buf, bufsize); // flush to buf
-        else
-          strncpy(buf, in_buf, strlen(in_buf)); // DON'T null terminate
-        lcd.noBlink();
-        free(in_buf);
-        return 1;
+        else if (IW_MODES[iw_mode] == 'R') // replace mode
+          buf[d_offset] = ' ';             // use ASCII input for nulls.
       }
 
-      /*===== handle input to in_buf =====*/
+      /*===== handle input to buf =====*/
       // Note: catch non-digit characters; catch buffer overflow
-      else if (d_root < bufsize && isdigit(ch))
+      else if (d_offset < bufsize && isdigit(ch))
       {
 
-        if (IW_INPUT_METHODS[mode] == 'D')
-        { // Decimal-Calculator Mode
-          if (shift && (ch - 1 - '0') < sizeof(IW_DEC_MAP))
-          { //shift on
-            in_buf[d_root] = IW_DEC_MAP[ch - 1 - '0'];
-          }
-          else
-          { // shift off
-            in_buf[d_root] = ch;
-          }
+        if (IW_INPUT_METHODS[input_method] == 'D') // Decimal-Calculator Mode
+        {
+          if (shift && (ch - 1 - '0') < sizeof(IW_DEC_MAP)) //shift on
+            buf[d_offset] = IW_DEC_MAP[ch - 1 - '0'];
+          else // shift off
+            buf[d_offset] = ch;
         }
 
-        else if (IW_INPUT_METHODS[mode] == 'H')
-        { // Hex Mode
-          if (shift && (ch - 1 - '0') < sizeof(IW_HEX_MAP))
-          { // shift on
-            in_buf[d_root] = IW_HEX_MAP[ch - 1 - '0'];
-          }
-          else
-          { // shift off
-            in_buf[d_root] = ch;
-          }
+        else if (IW_INPUT_METHODS[input_method] == 'H') // Hex Mode
+        {
+          if (shift && (ch - 1 - '0') < sizeof(IW_HEX_MAP)) // shift on
+            buf[d_offset] = IW_HEX_MAP[ch - 1 - '0'];
+          else // shift off
+            buf[d_offset] = ch;
         }
 
-        else if (IW_INPUT_METHODS[mode] == 'A')
-        { // ASCII Mode
-          if (shift && (ch - 1 - '0') < sizeof(IW_HEX_MAP))
-          { // shift on
+        else if (IW_INPUT_METHODS[input_method] == 'A') // ASCII Mode
+        {
+          if (shift && (ch - 1 - '0') < sizeof(IW_HEX_MAP)) // shift on
             ascii_buf[ascii_count++] = IW_HEX_MAP[ch - 1 - '0'];
-          }
-          else
-          { // shift off
+          else // shift off
             ascii_buf[ascii_count++] = ch;
-          }
+          // interpret ASCII input
           if (ascii_count < 2)
-            continue; // NOT updating display
+            continue; // input not complete
           else
           { // have all 2 hex digits of the ASCII
-            lcd.setCursor(12, 0);
-            lcd.print(ascii_buf);
+            lcd.setCursor(D_COLS - 4, D_ROWS - 1);
+            lcd.print(ascii_buf); // display now since ascii_buf will be cleared
             delay(400);
-            in_buf[d_root] = (char)strtol(ascii_buf, NULL, 16);
+            buf[d_offset] = (char)strtol(ascii_buf, NULL, 16);
             // ascii buffer cleared at the end of input loop
           }
         }
 
-        else if (IW_INPUT_METHODS[mode] == 'K')
-        { // Keypad Mode (self-contained)
-          // init
-          lcd.setCursor(11, 0);
+        else if (IW_INPUT_METHODS[input_method] == 'K') // Keypad Mode
+        {
+          lcd.setCursor(D_COLS - 5, D_ROWS - 1);
           lcd.print("[ ]");
           char *key_map = (char *)IW_KEYPAD_MAP[ch - '0']; // get keymap
           int k = 0, wait_count = 0;
           // loop
           while (wait_count < IW_KEYPAD_WAIT)
           {
-            lcd.setCursor(12, 0);
+            lcd.setCursor(D_COLS - 4, D_ROWS - 1);
             if (k != 0 && shift)
               lcd.print((char)(key_map[k] - 32));
             else
@@ -358,30 +384,20 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
                 key_map = (char *)IW_KEYPAD_MAP[ch - '0'];
               }
             }
-            lcd.setCursor(d_pos, 1); // just aesthetics
-            delay(5);
-            wait_count += 5; // NOTE: careful w/the Keypad lib
+            lcd.setCursor(d_pos[0], d_pos[1]); // just aesthetics
+            delay(10);
+            wait_count += 10; // NOTE: careful w/the Keypad lib
           }
-          in_buf[d_root] = (k != 0 && shift) ? key_map[k] - 32 : key_map[k];
+          buf[d_offset] = (k != 0 && shift) ? key_map[k] - 32 : key_map[k];
         }
 
         else
         { // erorr: mode not defined
-          lcd.clear();
-          lcd.print("Error");
-          lcd.setCursor(0, 1);
-          lcd.print("Inpt Mthd DNE");
-          delay(2000);
-          free(in_buf);
+          print_message("Inpt Mthd DNE", 2000);
+          free(buf);
           return -1;
         }
-        d_root++;
-        d_pos = (d_pos < 15) ? d_pos + 1 : d_pos; // cap d_pos at 15
       }
-
-      // clear ASCII mode buffer
-      memset(ascii_buf, 0, 4);
-      ascii_count = 0;
     }
     else // viewing mode
     {
@@ -389,72 +405,6 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
         fullscreen = fullscreen ? 0 : 1;
       else if (ch == VW_HEX_KEY) // switch between text and hex modes
         hex = hex ? 0 : 1;
-      else if (ch == VW_MENU_KEY) // handle menu operations
-      {
-        int res = menu(VW_MENU, VW_MENU_LEN, 0, NULL);
-        switch (res)
-        {
-        case 0: // Edit from cursor position
-        {
-          if (read_only) // disallow edit if read_only
-          {
-            print_message("Read only buffer", 1000);
-            break;
-          }
-          // get edit address
-          char *edit_addr =
-              buf + d_root + d_pos[1] * row_size + d_pos[0];
-          // get edit length
-          char op_buf[D_COLS] = {};
-          input_window(op_buf, D_COLS, 2, "LENGTH:");
-          int num = strtol(op_buf, NULL, 10);
-          if (num <= 0 || edit_addr + num > buf + bufsize) // invalid edit length
-          {
-            print_message("Bad edit length", 1000);
-            break;
-          }
-          input_window(edit_addr, num, iw_mode, NULL);
-          break;
-        }
-        case 1: // edit entire buffer
-          input_window(buf, bufsize, iw_mode, NULL);
-          break;
-        case 2: // settings
-        {
-          int s = menu(VW_SETTINGS, VW_SETTINGS_LEN, 0, "Settings ");
-          if (s == 0)
-          {
-            char op_buf[1] = {};
-            input_window(op_buf, 1, 2, "Force?");
-            (strtol(op_buf, NULL, 10)) ? ed_mode = 1 : ed_mode = 0;
-            lcd.clear();
-            lcd.print(ed_mode);
-          }
-          else if (s == 1)
-          {
-            char op_buf[1] = {};
-            input_window(op_buf, 1, 2, "0-Fill?");
-            (strtol(op_buf, NULL, 10)) ? iw_mode = 1 : iw_mode = 0;
-            lcd.clear();
-            lcd.print(iw_mode);
-          }
-          delay(1000);
-          break;
-        }
-        case 3:
-          lcd.noBlink();
-          return -1;
-        }
-      }
-      else if (ch == VW_EXIT_KEY)
-      {
-        lcd.noBlink();
-        return -1;
-      }
-      else if (ch == VW_ENTER_KEY)
-      {
-        // TODO
-      }
       else if (ch == VW_HOME_KEY)
       {
         d_root = 0;
@@ -474,7 +424,7 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
       {
         if (d_pos[0] > 0) // move cursor left
           d_pos[0]--;
-        else if (D_ROWS == 2 && d_root > 0) // 2-line display, scroll left
+        else if (num_rows == 1 && d_root > 0) // 2-line display, scroll left
           d_root--;
         else // display has more than 2 lines, scroll up
         {
@@ -494,9 +444,9 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
       }
       else if (ch == VW_RIGHT_KEY)
       {
-        if (d_pos[0] < row_size - 1) // move cursor right
+        if (d_pos[0] < row_size - 1 && d_offset <= bufsize) // move cursor right
           d_pos[0]++;
-        else if (D_ROWS == 2 && bufsize - d_root > row_size) // 2-line display
+        else if (num_rows == 1 && bufsize - d_root > row_size) // 2-line display
           d_root++;
         else if (d_pos[1] < num_rows - 1) // not yet on bottom line
         {
@@ -517,13 +467,16 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
         {
           if (d_root >= row_size)
             d_root -= row_size; // scroll up
-          else
+          else if (d_root >= 0)
+          {
             d_root = 0; // reset to home
+            d_pos[0] = 0;
+          }
         }
       }
       else if (ch == VW_DOWN_KEY)
       {
-        if (d_pos[1] < 1) // not on the bottom line
+        if (d_pos[1] < num_rows - 1) // not on the bottom row
           d_pos[1]++;
         else // on the bottom line
         {
@@ -537,288 +490,67 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
 
     } // end viewing command handling
 
+    // clear ASCII mode buffer regardless of mode
+    memset(ascii_buf, 0, 4);
+    ascii_count = 0;
+
   } // loop
 }
-
-/* input window */
-// int input_window(char *buf, int bufsize,
-//                  uint8_t iw_mode, const char *prompt)
-// {
-//   if (bufsize == 0) // watch for bad buf
-//     bufsize = strlen(buf);
-//   if (bufsize > MAX_BUFSIZE) // trim bufsize to MAX_BUFSIZE
-//     bufsize = MAX_BUFSIZE;
-//   if (!buf || bufsize < 1)
-//     return -2;
-
-//   // create and init input buffer
-//   char *in_buf = (char *)calloc(bufsize + 1, 1); // staged input buf w/null
-//   strncpy(in_buf, buf, bufsize);
-//   int d_root = 0, d_pos[2] = {0, 0}; // screen and cursor positions
-
-//   // setup vars
-//   uint8_t mode = 0;
-//   uint8_t shift = 0; // 0 for off, 1 for on
-//   char ascii_buf[4] = {};
-//   uint8_t ascii_count = 0; // buf for ASCII mode
-//   char ch = 0;
-//   lcd.blink();
-
-//   // input loop
-//   while (d_root <= bufsize) // Note: full buffer permissible
-//   {
-
-//     /*===== handle display =====*/
-//     lcd.clear();
-//     // display buffer
-//     if (strlen(in_buf) < 15) // less than 15 chars
-//     {
-//       lcd.print(in_buf);
-//       d_pos[0] = strlen(in_buf);
-//     }
-//     else // more than 15 characters
-//     {
-//       char temp[16]; // faster than displaying a long buffer
-//       strncpy(temp, in_buf + strlen(in_buf) - 15, 15);
-//       lcd.print(temp);
-//       d_pos[0] = 15;
-//     }
-//     lcd.setCursor(d_pos[0], d_pos[1]);
-
-//     // display status line
-//     lcd.setCursor(0, D_ROWS - 1);
-//     if (prompt)
-//       lcd.print((const char *)prompt); // if given prompt
-//     else
-//     { // else display iw_mode
-//       lcd.print(IW_MODES[iw_mode]);
-//       lcd.print(':');
-//       lcd.print(d_root);
-//       lcd.print('/');
-//       lcd.print(bufsize);
-//     }
-//     // input mode information
-//     if (IW_INPUT_METHODS[mode] == 'A')
-//     { // handle ASCII mode displays
-//       lcd.setCursor(10, 0);
-//       lcd.print("0x__");
-//       lcd.setCursor(12, 0);
-//       lcd.print(ascii_buf);
-//     }
-//     lcd.setCursor(D_COLS - 2, D_ROWS - 1);
-//     lcd.print(IW_INPUT_METHODS[mode]);       // mode
-//     shift ? lcd.print('S') : lcd.print(' '); // shift
-//     // full buffer alert
-//     if (d_root == bufsize)
-//     {
-//       lcd.setCursor(D_COLS - 2, D_ROWS - 1);
-//       lcd.print('!');
-//     }
-//     lcd.setCursor(d_pos[0], d_pos[1]);
-
-//     /*===== handle control chars =====*/
-//     ch = keypad_in();
-//     if (ch == IW_MODE_KEY)
-//     {
-//       // only Dec and Hex modes in Numeric mode
-//       if (iw_mode == 2)
-//         mode = (mode) ? 0 : 1;
-//       else
-//         (mode == sizeof(IW_INPUT_METHODS) - 1) ? mode = 0 : mode++;
-//     }
-//     else if (ch == IW_SHIFT_KEY)
-//     {
-//       shift = shift ? 0 : 1;
-//       continue; // don't reset ascii buffer
-//     }
-//     else if (ch == IW_CLEAR_KEY)
-//     {
-//       memset(in_buf, 0, bufsize); // clear input buffer
-//       d_root = 0;
-//       d_pos = 0;
-//       lcd.setCursor(0, 1);
-//       lcd.print("                ");
-//       lcd.setCursor(0, 1);
-//     }
-//     else if (ch == IW_EXIT_KEY)
-//     {
-//       lcd.noBlink();
-//       free(in_buf);
-//       return -1;
-//     }
-//     else if (ch == IW_DEL_KEY)
-//     {
-//       // Note: case to clear ASCII mode buffer on press
-//       if (IW_INPUT_METHODS[mode] == 'A' && ascii_count > 0)
-//         ; //nop
-//       else if (d_root > 0)
-//       {                            // prevent reverse overflow
-//         in_buf[--d_root] = 0;      // erase last character in in_buf
-//         lcd.setCursor(--d_pos, 1); // go back 1 position
-//         lcd.print(' ');
-//         lcd.setCursor(d_pos, 1);
-//       }
-//     }
-//     else if (ch == IW_ENTER_KEY)
-//     {
-//       if (iw_mode == 0)
-//         strncpy(buf, in_buf, bufsize); // flush to buf
-//       else
-//         strncpy(buf, in_buf, strlen(in_buf)); // DON'T null terminate
-//       lcd.noBlink();
-//       free(in_buf);
-//       return 1;
-//     }
-
-//     /*===== handle input to in_buf =====*/
-//     // Note: catch non-digit characters; catch buffer overflow
-//     else if (d_root < bufsize && isdigit(ch))
-//     {
-
-//       if (IW_INPUT_METHODS[mode] == 'D')
-//       { // Decimal-Calculator Mode
-//         if (shift && (ch - 1 - '0') < sizeof(IW_DEC_MAP))
-//         { //shift on
-//           in_buf[d_root] = IW_DEC_MAP[ch - 1 - '0'];
-//         }
-//         else
-//         { // shift off
-//           in_buf[d_root] = ch;
-//         }
-//       }
-
-//       else if (IW_INPUT_METHODS[mode] == 'H')
-//       { // Hex Mode
-//         if (shift && (ch - 1 - '0') < sizeof(IW_HEX_MAP))
-//         { // shift on
-//           in_buf[d_root] = IW_HEX_MAP[ch - 1 - '0'];
-//         }
-//         else
-//         { // shift off
-//           in_buf[d_root] = ch;
-//         }
-//       }
-
-//       else if (IW_INPUT_METHODS[mode] == 'A')
-//       { // ASCII Mode
-//         if (shift && (ch - 1 - '0') < sizeof(IW_HEX_MAP))
-//         { // shift on
-//           ascii_buf[ascii_count++] = IW_HEX_MAP[ch - 1 - '0'];
-//         }
-//         else
-//         { // shift off
-//           ascii_buf[ascii_count++] = ch;
-//         }
-//         if (ascii_count < 2)
-//           continue; // NOT updating display
-//         else
-//         { // have all 2 hex digits of the ASCII
-//           lcd.setCursor(12, 0);
-//           lcd.print(ascii_buf);
-//           delay(400);
-//           in_buf[d_root] = (char)strtol(ascii_buf, NULL, 16);
-//           // ascii buffer cleared at the end of input loop
-//         }
-//       }
-
-//       else if (IW_INPUT_METHODS[mode] == 'K')
-//       { // Keypad Mode (self-contained)
-//         // init
-//         lcd.setCursor(11, 0);
-//         lcd.print("[ ]");
-//         char *key_map = (char *)IW_KEYPAD_MAP[ch - '0']; // get keymap
-//         int k = 0, wait_count = 0;
-//         // loop
-//         while (wait_count < IW_KEYPAD_WAIT)
-//         {
-//           lcd.setCursor(12, 0);
-//           if (k != 0 && shift)
-//             lcd.print((char)(key_map[k] - 32));
-//           else
-//             lcd.print(key_map[k]);
-//           char k_ch = kpd.getKey(); // get raw char
-//           if (isdigit(k_ch))
-//           { // catch non-numeric chars
-//             wait_count = 0;
-//             if (k_ch == ch)
-//             {
-//               k = (key_map[k + 1] == 0) ? 0 : k + 1;
-//             }
-//             else
-//             { // new input
-//               ch = k_ch;
-//               k = 0;
-//               key_map = (char *)IW_KEYPAD_MAP[ch - '0'];
-//             }
-//           }
-//           lcd.setCursor(d_pos, 1); // just aesthetics
-//           delay(5);
-//           wait_count += 5; // NOTE: careful w/the Keypad lib
-//         }
-//         in_buf[d_root] = (k != 0 && shift) ? key_map[k] - 32 : key_map[k];
-//       }
-
-//       else
-//       { // erorr: mode not defined
-//         lcd.clear();
-//         lcd.print("Error");
-//         lcd.setCursor(0, 1);
-//         lcd.print("Inpt Mthd DNE");
-//         delay(2000);
-//         free(in_buf);
-//         return -1;
-//       }
-//       d_root++;
-//       d_pos = (d_pos < 15) ? d_pos + 1 : d_pos; // cap d_pos at 15
-//     }
-
-//     // clear ASCII mode buffer
-//     memset(ascii_buf, 0, 4);
-//     ascii_count = 0;
-
-//   } // end input loop
-
-//   // Error: didn't enter loop
-// }
 
 /* dedicated general purpose password prompt */
 int password(const char *true_pass)
 {
   if (!true_pass)
     return -1;
+  if (conf->wrong_pass_count > 0)
+  {
+    char temp[16] = "";
+    sprintf(temp, "Tries left: %d", MAX_PASS_FAILS - conf->wrong_pass_count);
+    print_message(temp, 2000);
+  }
+  if (conf->wrong_pass_count > MAX_PASS_FAILS)
+  { // locking system
+    print_message("System Locked", 1000);
+    while (true)
+      delay(100);
+  }
+  char pass_buf[MAX_PASS_LEN + 1] = {};
+  int res = simple_input(pass_buf, MAX_PASS_LEN, "Password:", true);
+  if (res == -2)
+    return -2;
+  if (strcmp(pass_buf, true_pass) == 0)
+  {
+    conf->wrong_pass_count = 0;
+    write_config();
+    return 1;
+  }
+  conf->wrong_pass_count++;
+  write_config();
+  return -1;
+}
+
+int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
+{
   // prompt
   lcd.clear();
   lcd.setCursor(0, 0);
-  fancy_print("Passwd:");
+  fancy_print(prompt);
   lcd.setCursor(0, 1);
-  fancy_print(" *:Exit #:Enter ");
-  lcd.setCursor(7, 0);
   lcd.blink();
 
-  // get password
   int count = 0;
-  char pass_buf[MAX_PASS_LEN] = {};
-  while (count < MAX_PASS_LEN)
+  while (count < bufsize)
   {
     char ch = keypad_in();
     if (ch == '*')
       return -2;
     if (ch == '#')
       break;
-    pass_buf[count] = ch;
-    lcd.print('*');
-    count++;
+    buf[count++] = ch;
+    lcd.print(is_pw ? '*' : ch);
   }
   lcd.noBlink();
-
-  // check password
-  if (count != strlen(true_pass))
-    return -1;
-  for (count = 0; count < strlen(true_pass); count++)
-    if (pass_buf[count] != true_pass[count])
-      return -1;
-
-  return 1;
+  return 0;
 }
 
 // print lines
@@ -919,6 +651,18 @@ char keypad_in()
       return ch_k;
     delay(5);
   }
+}
+
+// config reading/writing
+void read_config()
+{
+  free(conf); // lest memory leak
+  conf = (CT_Config *)malloc(CONFIG_LEN);
+  ee_read(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
+}
+void write_config()
+{
+  ee_write(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
 }
 
 /*===== Emulated EEPROM handling ===== */

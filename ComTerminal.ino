@@ -13,7 +13,7 @@
 void setup()
 {
 
-  // set up outputs
+  // set up display/serial
   lcd.begin(D_COLS, D_ROWS);
   if (serial)
   {
@@ -21,18 +21,17 @@ void setup()
     Serial.println("Starting serial");
   }
 
+  if (reset_EEPROM)
+    EEPROM.format();
+
   // get configs from flash storage
   if (reset_conf)
-  { // reset; read from default and write to flash
-    EEPROM.format();
-    conf = new CT_Config; // Note: CONFIG_LEN always even
-    ee_write(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
+  {
+    conf = new CT_Config();
+    write_config();
   }
   else
-  {                                         // read from flash into memory
-    conf = (CT_Config *)malloc(CONFIG_LEN); // allocate on heap!
-    ee_read(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
-  }
+    read_config();
 
   // Print welcome message and request password
   if (conf->splash)
@@ -73,16 +72,9 @@ void loop()
   // menu
   //int m_res = menu(MAIN_MENU, MAIN_MENU_LEN, 0, NULL);
 
-  // view
+  // buffered_editor
   char view1[] = "Ministry of Arcane Sciences, United Equestria.";
   int v_res = buffered_editor(view1, 0, 0, 0, NULL);
 
-  // input
-  char input[64] = "";
-  int res = input_window(input, 64, 0, NULL);
-  lcd.clear();
-  (res == 1) ? fancy_print("OK") : fancy_print("Exited!");
-  lcd.setCursor(0, 1);
-  fancy_print(input);
-  delay(1000);
+  print_message(view1, 1000);
 }
