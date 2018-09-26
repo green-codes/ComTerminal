@@ -92,7 +92,7 @@ const char *ED_MENU[] = {
     "Edit entire buf",
     "Settings",
     "Exit"};
-const int ED_SETTINGS_LEN = 2;
+const int ED_SETTINGS_LEN = 1;
 const char *ED_SETTINGS[] = {
     "Force Display?",
 };

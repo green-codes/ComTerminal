@@ -189,9 +189,9 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only,
         // handle ASCII mode displays
         if (IW_INPUT_METHODS[input_method] == 'A')
         {
-          lcd.setCursor(D_ROWS - 6, D_COLS - 1);
+          lcd.setCursor(D_COLS - 6, D_ROWS - 1);
           lcd.print("0x__");
-          lcd.setCursor(D_ROWS - 4, D_COLS - 1);
+          lcd.setCursor(D_COLS - 4, D_ROWS - 1);
           lcd.print(ascii_buf);
         }
         // IM and shift on/off displays
@@ -326,12 +326,12 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only,
       else if (buf_eof < bufsize && isdigit(ch))
       {
         // shift buffer after insertion point
-        if (IW_MODES[iw_mode] == 'I' && buf_eof < bufsize)
+        if (IW_MODES[iw_mode] == 'I')
         {
           memmove(buf + d_offset + 1, buf + d_offset, bufsize - d_offset - 1);
-          if (d_pos[0] < row_size - 1 && d_offset < buf_eof) // move cursor right
+          if (d_pos[0] < row_size - 1 && d_offset <= buf_eof) // move cursor
             d_pos[0]++;
-          else if (num_rows == 1 && d_root + row_size <= buf_eof) // 2-line
+          else if (num_rows == 1 && d_offset <= buf_eof) // 2-line
             d_root++;
           else if (d_pos[1] < num_rows - 1) // not yet on bottom line
           {
