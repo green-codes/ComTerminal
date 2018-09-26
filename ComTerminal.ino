@@ -12,7 +12,6 @@
 /*===== Init =====*/
 void setup()
 {
-
   // set up display/serial
   lcd.begin(D_COLS, D_ROWS);
   if (serial)
@@ -22,45 +21,45 @@ void setup()
   }
 
   if (reset_EEPROM)
+  {
+    print_message("Reset EEPROM...", 500);
     EEPROM.format();
+  }
 
-  // get configs from flash storage
+  // get configs from flash storage?
   if (reset_conf)
   {
+    print_message("Reset conf...", 500);
     conf = new CT_Config();
     write_config();
   }
   else
+  {
+    print_message("Read conf...", 500);
     read_config();
+  }
 
   // Print welcome message and request password
   if (conf->splash)
   {
-    fancy_print("M.A.S. Testing");
-    delay(2000);
+    print_message("M.A.S. Testing!", 2000);
   }
 
   // handle bootup password
   while (conf->req_pass)
   {
-    uint8_t res = password(conf->admin_pass);
+    int res = password(conf->admin_pass, "System Password:");
     lcd.clear();
     if (res == 1)
       break; // correct
     else if (res == -1)
-      fancy_print("PASSWD INCORRECT");
+      print_message("PASSWD INCORRECT", 1000);
     else if (res == -2)
-    {
-      fancy_print("PASSWORD REQ'D");
-      lcd.setCursor(0, 1);
-      fancy_print("FOR LOGIN");
-    }
-    delay(1000);
+      print_message("PASSWORD REQ'D  FOR LOGIN", 1000);
   }
   if (conf->splash)
   {
-    fancy_print("    Welcome!    ");
-    delay(1000);
+    print_message("    Welcome!    ", 1000);
   }
   lcd.clear();
 }

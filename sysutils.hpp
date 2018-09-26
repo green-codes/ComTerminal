@@ -199,7 +199,7 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only,
         lcd.print(IW_INPUT_METHODS[input_method]); // input method
         shift ? lcd.print('S') : lcd.print(' ');   // shift on/off
         // full buffer alert
-        if (buf_eof == bufsize)
+        if ((ED_MODES[ed_mode] != 'F' && buf_eof == bufsize) || d_offset == bufsize)
         {
           lcd.setCursor(D_COLS - 2, D_ROWS - 1);
           lcd.print('!');
@@ -323,7 +323,7 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only,
       /*===== handle input to buf =====*/
       // TODO: handle Insert mode
       // Note: catch non-digit characters; catch buffer overflow
-      else if (buf_eof < bufsize && isdigit(ch))
+      else if ((ED_MODES[ed_mode] == 'F' || buf_eof < bufsize) && d_offset < bufsize && isdigit(ch))
       {
         // shift buffer after insertion point
         if (IW_MODES[iw_mode] == 'I')
@@ -521,24 +521,24 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only,
 }
 
 /* dedicated general purpose password prompt */
-int password(const char *true_pass)
+int password(const char *true_pass, const char *prompt)
 {
   if (!true_pass)
     return -1;
-  if (conf->wrong_pass_count > 0)
-  {
-    char temp[16] = "";
-    sprintf(temp, "Tries left: %d", MAX_PASS_FAILS - conf->wrong_pass_count);
-    print_message(temp, 2000);
-  }
-  if (conf->wrong_pass_count > MAX_PASS_FAILS)
+  if (conf->wrong_pass_count >= MAX_PASS_FAILS)
   { // locking system
-    print_message("System Locked", 1000);
+    print_message("System Locked", 0);
     while (true)
       delay(100);
   }
+  if (conf->wrong_pass_count > 0)
+  {
+    char temp[16] = "";
+    sprintf(temp, "PW Retries: %d", MAX_PASS_FAILS - conf->wrong_pass_count);
+    print_message(temp, 1000);
+  }
   char pass_buf[MAX_PASS_LEN + 1] = {};
-  int res = simple_input(pass_buf, MAX_PASS_LEN, "Password:", true);
+  int res = simple_input(pass_buf, MAX_PASS_LEN, prompt, true);
   if (res == -2)
     return -2;
   if (strcmp(pass_buf, true_pass) == 0)
@@ -552,35 +552,14 @@ int password(const char *true_pass)
   return -1;
 }
 
-int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
-{
-  // prompt
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  fancy_print(prompt);
-  lcd.setCursor(0, 1);
-  lcd.blink();
-
-  int count = 0;
-  while (count < bufsize)
-  {
-    char ch = keypad_in();
-    if (ch == '*')
-      return -2;
-    if (ch == '#')
-      break;
-    buf[count++] = ch;
-    lcd.print(is_pw ? '*' : ch);
-  }
-  lcd.noBlink();
-  return 0;
-}
+/* ===== output helpers ===== */
 
 // print lines
 void print_lines(char *const buf, int bufsize, byte force,
                  int num_rows, int row_size, int start_row)
 {
-  if (!force) // if not in force mode, cut bufsize to first null
+  // if not in force mode, cut bufsize to first null
+  if (!force || bufsize == 0)
     bufsize = strlen(buf);
   int row_count = 0;
   // print num_lines or until end of buf
@@ -601,18 +580,18 @@ void print_line(char *const buf, byte force, int start_row)
   print_lines(buf, D_COLS, force, 1, D_COLS, start_row);
 }
 
+// simple message viewer
+void print_message(char *buf, int message_delay)
+{
+  lcd.clear();
+  print_lines(buf, 0, 0, D_ROWS, D_COLS, 0);
+  delay(message_delay);
+}
+
 // TODO: fancy view
 int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay)
 {
   // while (d_root + 32 < bufsize) roll_lines();
-}
-
-// simple message viewer
-void print_message(const char *buf, int message_delay)
-{
-  lcd.clear();
-  lcd.print(buf);
-  delay(message_delay);
 }
 
 // print helpers
@@ -658,6 +637,32 @@ void hex_print(const char *data, int num)
   }
 }
 
+/* ===== input helpers ===== */
+
+int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
+{
+  // prompt
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(prompt);
+  lcd.setCursor(0, 1);
+  lcd.blink();
+
+  int count = 0;
+  while (count < bufsize)
+  {
+    char ch = keypad_in();
+    if (ch == '*')
+      return -2;
+    if (ch == '#')
+      break;
+    buf[count++] = ch;
+    lcd.print(is_pw ? '*' : ch);
+  }
+  lcd.noBlink();
+  return 0;
+}
+
 // read input character
 char keypad_in()
 {
@@ -674,6 +679,14 @@ char keypad_in()
       return ch_k;
     delay(5);
   }
+}
+
+/* ===== System functions ===== */
+
+void reset_system()
+{
+  print_message("Reset system...", 0);
+  nvic_sys_reset();
 }
 
 // config reading/writing

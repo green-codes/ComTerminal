@@ -15,30 +15,33 @@
 #include <Key.h>
 #include <Keypad.h>
 #include <EEPROM.h>
+#include <libmaple/nvic.h>
 
 #include <Wire.h>
 #include <SPI.h>
 
+//#include "MPU6050.h"
+
 /*===== debug configs =====*/
 bool serial = 1;
 bool debug = 1;
-bool reset_EEPROM = 1;
+bool reset_EEPROM = 0;
+bool reset_conf = 0;
 
 /*===== general configs =====*/
 
 // struct for programmable configs
-bool reset_conf = 1;
 typedef struct
 {
-    // system configs
-    bool splash = 0;
-    bool fancy = 1;
-    int fancy_delay = 20;        // in milliseconds
-    char req_pass = 0;           // require password
-    char admin_pass[5] = "0042"; // admin password
-    int wrong_pass_count = 0;    // number of failed password attempts
-    // app configs
-    int placeholder;
+  // system configs
+  bool splash = 1;
+  bool fancy = 1;
+  int fancy_delay = 20;        // in milliseconds
+  char req_pass = 1;           // require password
+  char admin_pass[5] = "0042"; // admin password
+  int wrong_pass_count = 0;    // number of failed password attempts
+  // app configs
+  int placeholder;
 } CT_Config;
 const uint16_t CONFIG_ADDRESS = 0x0;
 const int CONFIG_LEN = sizeof(CT_Config);
@@ -163,6 +166,13 @@ int menu(const char **items, int num_items, int default_pos, char *prompt);
       1: success
       -1: failure
       -2: user exit
+    Operation
+      Two modes: V(iew) and F(orce). 
+        View mode is for basic WYSIWYG editing
+        Force mode allows for all input behaviors, which enables adding nulls
+          to the buffer, insertions leading to data loss at the end of the 
+          buffer, etc. 
+    
 */
 int buffered_editor(char *buf, int bufsize, uint8_t read_only,
                     uint8_t ed_mode, const char *prompt);
@@ -171,16 +181,15 @@ int buffered_editor(char *buf, int bufsize, uint8_t read_only,
 // returns 1 for correct password, -1 for incorrect _, -2 for user exit
 int password(const char *true_pass);
 
-// simple input prompt, decimal only
-// returns 0 on normal return, -2 on user exit (buffer may be modified)
-int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
+/* ===== output helpers ===== */
 
 // print lines to LCD from buffer
 void print_lines(char *const buf, int bufsize, uint8_t force,
                  int num_lines, int row_size, int start_row);
+void print_line(char *const buf, byte force, int start_row);
 
 // simple message display
-void print_message(const char *buf, int message_delay);
+void print_message(char *buf, int message_delay);
 
 // view char buffers fancily (full screen, no force)
 int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay);
@@ -191,15 +200,26 @@ void fancy_print(const int num);
 void hex_print(const char data);
 void hex_print(const char *data, int num);
 
+/* ===== input helpers ===== */
+
+// simple input prompt, decimal only
+// returns 0 on normal return, -2 on user exit (buffer may be modified)
+int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
+
 // read input character
 char keypad_in();
+
+/* ===== System functions ===== */
+
+// system reset
+void reset_system();
 
 // config reading/writing
 void read_config();
 void write_config();
 
-/*===== Emulated EEPROM handling =====
-   the EEPROM library manages a virtual address space starting on 0x0 */
+/* ===== Emulated EEPROM handling ===== 
+the EEPROM library manages a virtual address space starting on 0x0 */
 // Note: possible 1-byte overflow; make sure num is even
 // Note: ptr is unprotected; know what you're doing
 void ee_write(uint16_t address, byte *ptr, int num);
