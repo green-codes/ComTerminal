@@ -4,32 +4,42 @@
 */
 
 // include the library code:
-#include "DSKY.hpp"
+#include "system.hpp"
 #include "functions.hpp"
 
 
 void setup() {
 
-  // enable LCD backlight
-  pinMode(backlight_pin, OUTPUT);
-  digitalWrite(backlight_pin, HIGH);
-
-  // set up the LCD's number of columns and rows:
+  // set up outputs
   lcd.begin(16, 2);
+  if (serial) {
+    Serial.begin(9600);
+    Serial.println("Starting serial");
+  }
 
-  // TODO: using Serial for testing, change later
-  Serial.begin(9600);
-  Serial.println("Begin test!");
+  // get configs from flash storage
+  if (reset_conf) { // reset; read from default and write to flash
+    EEPROM.format();
+    conf = new ct_config;      // Note: config_len always even
+    ee_write(config_address, (byte*)conf, config_len);
+  } else {  // read from flash into memory
+    conf = (ct_config*)malloc(config_len);  // allocate on heap!
+    ee_read(config_address, (byte*)conf, config_len);
+  }
+
+  // LCD backlight
+  pinMode(backlight_pin, OUTPUT);
+  digitalWrite(backlight_pin, (conf->lcd_backlight) ? HIGH : LOW);
 
   // Print welcome message and request password
-  if (splash) {
+  if (conf->splash) {
     fancy_print("M.A.S. Testing");
     delay(2000);
   }
 
   // handle bootup password
-  while (req_pass) {
-    int8_t res = password(admin_pass);
+  while (conf->req_pass) {
+    int8_t res = password(conf->admin_pass);
     lcd.clear();
     if (res == 1) break;  // correct
     else if (res == -1) fancy_print("PASSWD INCORRECT");
@@ -39,7 +49,7 @@ void setup() {
     }
     delay(1000);
   }
-  if (splash) {
+  if (conf->splash) {
     fancy_print("    Welcome!    ");
     delay(1000);
   }
@@ -60,11 +70,13 @@ void loop() {
 // menu handling
 int main_menu() {
 
+  // debug PROGMEM
+
   lcd.clear(); fancy_print("Input test...");
   delay(1000);
   char input[64] = "";
   int res = input_window(input, 64, 0, NULL);
-  lcd.clear(); (res == 1) ? fancy_print("OK") : fancy_print("Failed!");
+  lcd.clear(); (res == 1) ? fancy_print("OK") : fancy_print("Exited!");
   lcd.setCursor(0, 1); fancy_print(input);
   delay(2000);
 
@@ -74,37 +86,70 @@ int main_menu() {
 }
 
 
-// view window: buffer viewer
+// view window: character viewer
+// Note: updates entire screen on every keystroke.
 int view_window(char* buf, int bufsize,
                 const uint8_t vw_mode, const char* prompt) {
   if (bufsize == 0) bufsize = strlen(buf);
   if (!buf || bufsize < 1) return -2;
 
   // setup vars
-  uint8_t mode = 0;  // 2 modes: 1-line scrolling and full screen
-  int buf_pos = 0, d_pos = 0;
-  int max_buf_pos = (vw_mode == 1) ? bufsize : strlen(buf);
+  uint8_t mode = 0;  // 2 modes: 1-line scrolling, fullscreen
+  uint8_t hex = 0;   // hex display enable
+  int buf_pos = 0;   // buffer position at cursor
+  int d_root = 0;    // buffer position at leftmost of screen
+  int d_pos[2] = {0, 1};  // cursor position on screen
+  // limit buffer position according to vw_mode
+  int max_buf_pos = (vw_modes[vw_mode] == 'F') ? bufsize : strlen(buf);
 
   // loop until command to exit
+  lcd.blink();
   while (true) {
 
     /*===== handle display =====*/
-    lcd.clear(); lcd.setCursor(0, 0);
-    // prompt
-    if (prompt) fancy_print(prompt);
-    else lcd.print(vw_modes[vw_mode]);
+    lcd.clear();
+    if (mode == 0) {  // 1-line horizontal scrolling
+      d_pos[1] = 1;  // snap cursor to the second line
+      // prompt
+      if (prompt) lcd.print(prompt);
+      else lcd.print(vw_modes[vw_mode]); lcd.print(':');
+      // display ASCII for the current byte
+      lcd.setCursor(10, 0); lcd.print("0x"); hex_print(buf[buf_pos]);
 
+      // rolling window
+      lcd.setCursor(0, 1);
+      if (hex) {  // hex mode
+        lcd.setCursor(1, 1);
+        for (int i = 0; i < 5 &&
+      }
+    else if (vw_modes[vw_mode] == 'F') { // force display all characters
+        for (int i = 0; i < 15 && d_root + i < bufsize; i++) {
+          if (buf[d_root + i] == 0) lcd.write(' '); // use sp for 0
+          else lcd.write(buf[d_root + i]);
+        }
+      }
+      else { // use lcd.print for convenience
+        char temp[15]; strncpy(temp, buf + d_root, 15); // len <= 15
+        lcd.print(temp);   // faster than displaying large bufs
+      }
+    }
+    else if (mode == 1) {  // fullscreen
+      if (hex) {
+          
+      }
+    }
+    lcd.setCursor(d_pos[0], d_pos[1]);
 
     /*===== handle commands =====*/
     char ch = keypad_in();
 
+  } // loop
 
-
-  }
 
 }
 
-// input window: buffer editor
+
+// input window
 int input_window(char* buf, int bufsize,
                  const uint8_t iw_mode, const char* prompt) {
   if (bufsize == 0) bufsize = strlen(buf);  // watch for bad buf
@@ -131,13 +176,15 @@ int input_window(char* buf, int bufsize,
     lcd.clear(); lcd.setCursor(0, 0);
     // prompt
     if (prompt) lcd.print((const char*)prompt); // if given prompt
-    else lcd.print(iw_modes[iw_mode]); // else display iw_mode
-    lcd.print(buf_pos); lcd.print('/'); lcd.print(bufsize);
+    else {                                  // else display iw_mode
+      lcd.print(iw_modes[iw_mode]); lcd.print(':');
+      lcd.print(buf_pos); lcd.print('/'); lcd.print(bufsize);
+    }
 
     // display input mode information
     if (input_modes[mode] == 'A') {  // handle ASCII mode displays
-      lcd.setCursor(9, 0); lcd.print("0x  ");
-      lcd.setCursor(11, 0); lcd.print(ascii_buf);
+      lcd.setCursor(10, 0); lcd.print("0x__");
+      lcd.setCursor(12, 0); lcd.print(ascii_buf);
     }
     lcd.setCursor(14, 0);
     lcd.print(input_modes[mode]);  // mode
@@ -156,9 +203,12 @@ int input_window(char* buf, int bufsize,
       d_pos = strlen(in_buf);
     }
     else {  // more than 15 characters
-      lcd.print((char*)(in_buf + strlen(in_buf) - 15));
+      char temp[16];  // faster than displaying a long buffer
+      strncpy(temp, in_buf + strlen(in_buf) - 15, 15);
+      lcd.print(temp);
       d_pos = 15;
     }
+    lcd.setCursor(d_pos, 1);
 
 
     /*===== get key =====*/
@@ -166,8 +216,8 @@ int input_window(char* buf, int bufsize,
 
     /*===== handle control chars =====*/
     if (ch == mode_key) {
-      // no input method switching in numeric mode
-      if (iw_mode == 2)  mode = 0;
+      // only Dec and Hex modes in Numeric mode
+      if (iw_mode == 2)  mode = (mode) ? 0 : 1;
       else (mode == sizeof(input_modes) - 1) ? mode = 0 : mode ++;
     }
     else if (ch == shift_key) {
@@ -185,7 +235,9 @@ int input_window(char* buf, int bufsize,
       free(in_buf); return -1;
     }
     else if (ch == del_key) {
-      if (buf_pos > 0) {  // prevent reverse overflow
+      // Note: case to clear ASCII mode buffer on press
+      if (input_modes[mode] == 'A' && ascii_count > 0);  //nop
+      else if (buf_pos > 0) {  // prevent reverse overflow
         in_buf[--buf_pos] = 0;  // erase last character in in_buf
         lcd.setCursor(--d_pos, 1);  // go back 1 position
         lcd.print(' '); lcd.setCursor(d_pos, 1);
@@ -224,22 +276,22 @@ int input_window(char* buf, int bufsize,
         } else {      // shift off
           ascii_buf[ascii_count++] = ch;
         }
-        lcd.setCursor(11, 0); lcd.print(ascii_buf);
         if (ascii_count < 2) continue; // NOT updating display
         else {    // have all 2 hex digits of the ASCII
-          delay(200);
+          lcd.setCursor(12, 0); lcd.print(ascii_buf);
+          delay(400);
           in_buf[buf_pos] = (char)strtol(ascii_buf, NULL, 16);
         }
       }
 
       else if (input_modes[mode] == 'K') {  // Keypad Mode (self-contained)
         // init
-        lcd.setCursor(10, 0); lcd.print("[ ]");
+        lcd.setCursor(11, 0); lcd.print("[ ]");
         char* key_map = (char*) keypad_map[ch - '0'];  // get keymap
         int k = 0, wait_count = 0;
         // loop
         while (wait_count < keypad_wait) {
-          lcd.setCursor(11, 0);
+          lcd.setCursor(12, 0);
           if (k != 0 && shift) lcd.print((char)(key_map[k] - 32));
           else lcd.print(key_map[k]);
           char k_ch = kpd.getKey(); // get raw char
@@ -280,7 +332,7 @@ int input_window(char* buf, int bufsize,
 }
 
 
-// general purpose password prompt
+// dedicated general purpose password prompt
 int password(const char* true_pass) {
   if (!true_pass) return -1;
   // prompt
@@ -299,7 +351,7 @@ int password(const char* true_pass) {
     pass_buf[count] = ch;
     lcd.print('*');
     count ++;
-  } // TODO: max_pass_len+ passwords truncated
+  }
   lcd.noBlink();
 
   // check password
@@ -311,35 +363,77 @@ int password(const char* true_pass) {
 }
 
 
-// fancy print
+// print helpers
 void fancy_print(const char* buf) {
   if (!buf) return;
-  if (!fancy) {
+  if (!conf->fancy) {
     lcd.print(buf);
     return;
   }
   int len = strlen(buf);
   for (int i = 0; i < len; i++) {
     lcd.print(buf[i]);
-    delay(25);
+    delay(conf->fancy_delay);
   }
 }
-void fancy_print(const int num) {
-  char temp[12] = {};
+void fancy_print(const long num) {
+  char temp[12] = {};  // max 12 digits
   sprintf(temp, "%d", num);
   fancy_print(temp);
+}
+void fancy_print(const double num) {
+  char temp[12] = {};  // max 12 digits
+  sprintf(temp, "%f", num);
+  fancy_print(temp);
+}
+void hex_print(const byte data) {
+  char temp[2];
+  sprintf(temp, "%h", (uint8_t)data);
+  lcd.print(temp);
+}
+void hex_print(const char* data, int num) {
+  for (int i = 0; i < num; i++) {
+    hex_print(data[i]);
+  }
 }
 
 
 // read input character
-// TODO: maybe use both Serial and Keypad?
 char keypad_in() {
   while (true) {  //TODO: hanging the entire system!
-    unsigned char ch_s = Serial.read(); //TODO: Serial for testing
+    if (serial) {  // Note: serial input takes precedence if enabled
+      unsigned char ch_s = Serial.read();
+      if (ch_s != 255) return ch_s;
+    }
     unsigned char ch_k = kpd.getKey();
-    if (ch_s != 255) return ch_s;
     if (ch_k != 0) return ch_k;
     delay(5);
   }
 }
+
+
+/*===== Emulated EEPROM handling ===== */
+// Note: possible 1-byte overflow; make sure num is even
+// Note: ptr is unprotected; know what you're doing
+void ee_write(uint16_t address, byte* ptr, int num) {
+  uint16_t buf;  // 2-byte buffer for writing
+  while (num > 0) {
+    buf = *(uint16_t*)ptr;
+    EEPROM.write(address, buf);
+    address ++; ptr += 2; num -= 2;
+  }
+}
+// Note: possible 1-byte overflow; make sure num is even
+// Note: ptr is unprotected; know what you're doing
+byte* ee_read(uint16_t address, byte* ptr, int num) {
+  uint16_t buf;  // 2-byte buffer for reading
+  byte* orig_ptr = ptr;
+  while (num > 0) {
+    EEPROM.read(address, &buf);
+    *(uint16_t*)ptr = buf;
+    address ++; ptr += 2; num -= 2;
+  }
+  return orig_ptr;  // for convenience
+}
+
 
