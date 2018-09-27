@@ -17,9 +17,8 @@
 // placeholder
 void test_program()
 {
-  // buffered_editor
   char view1[DEFAULT_BUFSIZE] = "Ministry of Arcane Sciences, United Equestria.";
-  int v_res = buffered_editor(view1, DEFAULT_BUFSIZE, 0, 0, NULL);
+  int v_res = buffered_editor(view1, DEFAULT_BUFSIZE, 0, 0, 0, 1, NULL);
 
   print_message(view1, DEFAULT_DELAY_TIME);
 }
@@ -62,17 +61,16 @@ void sys_settings()
   }
   else if (MAIN_SETTINGS[s] == "Admin password")
   {
-    char buf[MAX_PASS_LEN] = {};
     int res = password(conf->admin_pass, "Curr Admin PW");
     if (res == 1)
     {
-      memset(buf, 0, MAX_PASS_LEN);
-      buffered_editor(buf, 0, 0, 0, "New PW");
+      char buf[MAX_PASS_LEN] = {};
+      buffered_editor(buf, MAX_PASS_LEN, 0, 0, 1, 1, "New PW");
       if (strtol(buf, NULL, 10) == 0)
-        print_message("Invalid PW!", DEFAULT_DELAY_TIME);
+        print_message("New PW Invalid!", DEFAULT_DELAY_TIME);
       else
       {
-        strncpy(conf->admin_pass, buf, strlen(buf));
+        strncpy(conf->admin_pass, buf, MAX_PASS_LEN);
         print_message("New PW:\n%s", DEFAULT_DELAY_TIME, conf->admin_pass);
       }
     }
@@ -81,7 +79,7 @@ void sys_settings()
   }
   else if (MAIN_SETTINGS[s] == "Device name")
   {
-    buffered_editor(conf->admin_pass, 0, 0, 0, "Dev Name");
+    buffered_editor(conf->device_name, 0, 0, 0, 1, 0, "Dev Name");
     print_message("Device name:\n%s", DEFAULT_DELAY_TIME, conf->device_name);
   }
   else if (MAIN_SETTINGS[s] == "Reset device")

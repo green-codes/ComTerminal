@@ -183,8 +183,8 @@ int menu(const char **items, const void (**programs)(), int num_items,
           buffer, etc. 
     
 */
-int buffered_editor(char *buf, int bufsize, uint8_t read_only,
-                    uint8_t ed_mode, const char *prompt);
+int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
+                    byte editing, byte in_place, const char *prompt);
 
 // password handling w/brute force lockout
 // returns 1 for correct password, -1 for incorrect _, -2 for user exit
