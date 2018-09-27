@@ -7,11 +7,17 @@
 #include "ComTerminal.h"
 #include "data.h"
 #include "sysutils.hpp"
-#include "functions.hpp"
+#include "programs.hpp"
 
-/*===== Init =====*/
-void setup()
+/* ===== Init ===== */
+void setup() // Note: keeping setup explicit
 {
+  // setup LED pins
+  pinMode(LED_STATUS, OUTPUT);
+  pinMode(LED_WORK, OUTPUT);
+  digitalWrite(LED_STATUS, LOW);
+  digitalWrite(LED_WORK, LOW);
+
   // set up display/serial
   lcd.begin(D_COLS, D_ROWS);
   if (serial)
@@ -68,11 +74,8 @@ void setup()
 void loop()
 {
   // menu
-  //int m_res = menu(MAIN_MENU, MAIN_MENU_LEN, 0, NULL);
-
-  // buffered_editor
-  char view1[DEFAULT_BUFSIZE] = "Ministry of Arcane Sciences, United Equestria.";
-  int v_res = buffered_editor(view1, DEFAULT_BUFSIZE, 0, 0, NULL);
-
-  print_message(view1, 1000);
+  int item = menu(PROGRAM_NAMES, PROGRAM_LIST_LEN, 0, "Main Mnu");
+  // call program
+  if (item > -1)
+    (*(program_ptrs[item]))();
 }

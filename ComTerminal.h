@@ -8,23 +8,27 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <string.h>
+// C standard libs
 #include <stdlib.h>
+#include <stdarg.h> // variable arguments
 #include <math.h>
+#include <string.h>
 
-#include <libmaple/nvic.h>
+// STM32Duino libs
+#include <libmaple/nvic.h> // stm32f1 reset
 #include <EEPROM.h>
 #include <Wire.h>
 #include <SPI.h>
 
+// hardware libs
 #include <LiquidCrystal.h>
 #include <Key.h>
 #include <Keypad.h>
 #include <SD.h>
-
 //#include "MPU6050.h"
 
 /*===== debug configs =====*/
+bool led_enabled = 1;
 bool serial = 1;
 bool debug = 1;
 bool reset_EEPROM = 0;
@@ -38,10 +42,10 @@ const int MAX_PASS_FAILS = 10;
 typedef struct
 {
   // system configs
-  bool splash = 1;
+  bool splash = 0;
   bool fancy = 1;
   int fancy_delay = 20;                   // in milliseconds
-  char req_pass = 1;                      // require password
+  char req_pass = 0;                      // require password
   char admin_pass[MAX_PASS_LEN] = "0042"; // admin password
   int wrong_admin_pass_count = 0;         // number of failed password attempts
   // app configs
@@ -56,8 +60,8 @@ const int LCD_RS = PA2, LCD_EN = PA3,
           LCD_D4 = PB11, LCD_D5 = PB10, LCD_D6 = PB1, LCD_D7 = PB0;
 
 // LED configs
-const int STATUS_LED = PC13;
-const int WORK_LED = PC14;
+const int LED_STATUS = PC13;
+const int LED_WORK = PC14;
 
 // keypad configs
 const byte KEYPAD_ROWS = 4, KEYPAD_COLS = 4;
@@ -69,19 +73,15 @@ const char KEYPAD_KEYS[KEYPAD_ROWS][KEYPAD_COLS] = { // Define the Keymap
 byte KEYPAD_ROW_PINS[KEYPAD_ROWS] = {PA15, PB3, PB4, PB5};
 byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB12, PB13, PB14, PB15};
 
-// main menu
-const int MAIN_MENU_LEN = 0;
-const char *MAIN_MENU[] = {
-
-};
+const int DEFAULT_DELAY_TIME = 1000;
 
 // menu function configs
 const char M_UP_KEY = 'A';
 const char M_DOWN_KEY = 'B';
-const char M_ENTER_KEY = 'C';
+const char M_MENU_KEY = 'C';
 const char M_EXIT_KEY = 'D';
 const char M_CLEAR_KEY = '*';
-const char M_ENTER_KEY2 = '#';
+const char M_ENTER_KEY = '#';
 
 // Editor configs
 /* modes
@@ -93,12 +93,13 @@ const char ED_MODES[] = {'V', 'F'};
 const int ED_MENU_LEN = 4;
 const char *ED_MENU[] = {
     "Save buffer",
-    "Edit entire buf",
+    "Revert changes",
     "Settings",
     "Exit"};
-const int ED_SETTINGS_LEN = 1;
+const int ED_SETTINGS_LEN = 2;
 const char *ED_SETTINGS[] = {
-    "Force Display?",
+    "Force Mode?",
+    "Insert/Replace?",
 };
 const char ED_MENU_KEY = 'C';
 const char ED_EXIT_KEY = 'D';
@@ -189,8 +190,8 @@ void print_lines(char *const buf, int bufsize, uint8_t force,
                  int num_lines, int row_size, int start_row);
 void print_line(char *const buf, byte force, int start_row);
 
-// simple message display
-void print_message(char *buf, int message_delay);
+// printf-like simple message display
+void print_message(char *buf, int message_delay, ...);
 
 // view char buffers fancily (full screen, no force)
 int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay);
@@ -207,8 +208,9 @@ void hex_print(const char *data, int num);
 // returns 0 on normal return, -2 on user exit (buffer may be modified)
 int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
 
-// read input character
-char keypad_in();
+// wait for keypad input
+// NOTE: this hangs the main program loop
+char keypad_wait();
 
 /* ===== System functions ===== */
 
