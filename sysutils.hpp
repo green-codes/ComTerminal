@@ -525,16 +525,17 @@ int password(const char *true_pass, const char *prompt)
 {
   if (!true_pass)
     return -1;
-  if (conf->wrong_pass_count >= MAX_PASS_FAILS)
+  if (conf->wrong_admin_pass_count >= MAX_PASS_FAILS)
   { // locking system
     print_message("System Locked", 0);
     while (true)
       delay(100);
   }
-  if (conf->wrong_pass_count > 0)
+  if (conf->wrong_admin_pass_count > 0)
   {
     char temp[16] = "";
-    sprintf(temp, "PW Retries: %d", MAX_PASS_FAILS - conf->wrong_pass_count);
+    sprintf(temp, "PW Retries: %d",
+            MAX_PASS_FAILS - conf->wrong_admin_pass_count);
     print_message(temp, 1000);
   }
   char pass_buf[MAX_PASS_LEN + 1] = {};
@@ -543,11 +544,11 @@ int password(const char *true_pass, const char *prompt)
     return -2;
   if (strcmp(pass_buf, true_pass) == 0)
   {
-    conf->wrong_pass_count = 0;
+    conf->wrong_admin_pass_count = 0;
     write_config();
     return 1;
   }
-  conf->wrong_pass_count++;
+  conf->wrong_admin_pass_count++;
   write_config();
   return -1;
 }

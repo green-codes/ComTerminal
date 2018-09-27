@@ -10,15 +10,17 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
+
+#include <libmaple/nvic.h>
+#include <EEPROM.h>
+#include <Wire.h>
+#include <SPI.h>
 
 #include <LiquidCrystal.h>
 #include <Key.h>
 #include <Keypad.h>
-#include <EEPROM.h>
-#include <libmaple/nvic.h>
-
-#include <Wire.h>
-#include <SPI.h>
+#include <SD.h>
 
 //#include "MPU6050.h"
 
@@ -30,24 +32,23 @@ bool reset_conf = 0;
 
 /*===== general configs =====*/
 
+const int MAX_PASS_LEN = 16; // maximum password length
+const int MAX_PASS_FAILS = 10;
 // struct for programmable configs
 typedef struct
 {
   // system configs
   bool splash = 1;
   bool fancy = 1;
-  int fancy_delay = 20;        // in milliseconds
-  char req_pass = 1;           // require password
-  char admin_pass[5] = "0042"; // admin password
-  int wrong_pass_count = 0;    // number of failed password attempts
+  int fancy_delay = 20;                   // in milliseconds
+  char req_pass = 1;                      // require password
+  char admin_pass[MAX_PASS_LEN] = "0042"; // admin password
+  int wrong_admin_pass_count = 0;         // number of failed password attempts
   // app configs
   int placeholder;
 } CT_Config;
 const uint16_t CONFIG_ADDRESS = 0x0;
 const int CONFIG_LEN = sizeof(CT_Config);
-
-const int MAX_PASS_LEN = 16; // maximum password length
-const int MAX_PASS_FAILS = 10;
 
 // display configs
 const uint8_t D_COLS = 16, D_ROWS = 2; // display dimensions
@@ -65,8 +66,8 @@ const char KEYPAD_KEYS[KEYPAD_ROWS][KEYPAD_COLS] = { // Define the Keymap
     {'4', '5', '6', 'B'},
     {'7', '8', '9', 'C'},
     {'*', '0', '#', 'D'}};
-byte KEYPAD_ROW_PINS[KEYPAD_ROWS] = {PB15, PB14, PB13, PB12};
-byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB5, PB4, PB3, PA15};
+byte KEYPAD_ROW_PINS[KEYPAD_ROWS] = {PA15, PB3, PB4, PB5};
+byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB12, PB13, PB14, PB15};
 
 // main menu
 const int MAIN_MENU_LEN = 0;
