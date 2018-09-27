@@ -38,32 +38,35 @@ bool reset_conf = 0;
 
 const int MAX_PASS_LEN = 16; // maximum password length
 const int MAX_PASS_FAILS = 10;
-// struct for programmable configs
+const int MAX_NAME_LEN = 10;
+
+// LED configs
+const int LED_WORK = PC13;
+const int LED_WAIT = PC14;
+
+/* ===== programmable configs ===== */
 typedef struct
 {
   // system configs
   bool splash = 0;
   bool fancy = 1;
-  int fancy_delay = 20;                   // in milliseconds
-  char req_pass = 0;                      // require password
-  char admin_pass[MAX_PASS_LEN] = "0042"; // admin password
-  int wrong_admin_pass_count = 0;         // number of failed password attempts
+  int fancy_delay = 20;                       // in milliseconds
+  char req_pass = 0;                          // require password
+  char admin_pass[MAX_PASS_LEN + 1] = "0042"; // admin password
+  char device_name[MAX_NAME_LEN + 1] = "mas-tp00x";
+  int wrong_admin_pass_count = 0; // number of failed password attempts
   // app configs
   int placeholder;
 } CT_Config;
 const uint16_t CONFIG_ADDRESS = 0x0;
 const int CONFIG_LEN = sizeof(CT_Config);
 
-// display configs
+/* ===== display configs ===== */
 const uint8_t D_COLS = 16, D_ROWS = 2; // display dimensions
 const int LCD_RS = PA2, LCD_EN = PA3,
           LCD_D4 = PB11, LCD_D5 = PB10, LCD_D6 = PB1, LCD_D7 = PB0;
 
-// LED configs
-const int LED_STATUS = PC13;
-const int LED_WORK = PC14;
-
-// keypad configs
+/* ===== keypad configs ===== */
 const byte KEYPAD_ROWS = 4, KEYPAD_COLS = 4;
 const char KEYPAD_KEYS[KEYPAD_ROWS][KEYPAD_COLS] = { // Define the Keymap
     {'1', '2', '3', 'A'},
@@ -74,6 +77,15 @@ byte KEYPAD_ROW_PINS[KEYPAD_ROWS] = {PA15, PB3, PB4, PB5};
 byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB12, PB13, PB14, PB15};
 
 const int DEFAULT_DELAY_TIME = 1000;
+
+/*===== global vars =====*/
+LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // see docs
+Keypad kpd = Keypad(makeKeymap(KEYPAD_KEYS), KEYPAD_ROW_PINS, KEYPAD_COL_PINS,
+                    KEYPAD_ROWS, KEYPAD_COLS);
+CT_Config *conf = NULL;            // pointer to config struct
+unsigned long work_started_millis; // record start time for last task
+
+/* ===== sysutils configs ===== */
 
 // menu function configs
 const char M_UP_KEY = 'A';
@@ -147,19 +159,14 @@ const char IW_KEYPAD_MAP[10][6] = { // null-terminate for wrapping
     {'8', 't', 'u', 'v'},
     {'9', 'w', 'x', 'y', 'z'}};
 
-/*===== global vars =====*/
-LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // see docs
-Keypad kpd = Keypad(makeKeymap(KEYPAD_KEYS), KEYPAD_ROW_PINS, KEYPAD_COL_PINS,
-                    KEYPAD_ROWS, KEYPAD_COLS);
-CT_Config *conf = NULL;            // pointer to config struct
-unsigned long work_started_millis; // record start time for last task
-
 /*===== sysutil functions =====*/
 
 /* generic menu
     Returns the selected entry, or -1 if user exits menu
 */
 int menu(const char **items, int num_items, int default_pos, char *prompt);
+int menu(const char **items, const void (**programs)(), int num_items,
+         int default_pos, char *prompt);
 
 /* view window: basic character viewer
     Params

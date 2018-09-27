@@ -72,6 +72,15 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
     }
   }
 }
+int menu(const char **items, void (**functions)(), int num_items,
+         int default_pos, char *prompt)
+{
+  // get function selection
+  int s = menu(items, num_items, default_pos, prompt);
+  // run function if valid
+  if (s > -1)
+    (*functions[s])();
+}
 
 /* buffered editor: safely view and edit buffers */
 int buffered_editor(char *in_buf, int bufsize, byte read_only,
@@ -579,15 +588,23 @@ void print_lines(char *const buf, int bufsize, byte force,
   // if not in force mode, cut bufsize to first null
   if (!force || bufsize == 0)
     bufsize = strlen(buf);
-  int row_count = 0;
+  int row_count = 0, num_printed = 0;
   // print num_lines or until end of buf
-  for (int i = 0; i < bufsize && i < num_rows * row_size; i++)
+  for (int i = 0; i < bufsize && num_printed < num_rows * row_size; i++)
   {
+    // handle new line character
+    if (buf[i] == '\n')
+    {
+      if (row_count < num_rows)
+        lcd.setCursor(0, start_row + row_count++);
+      num_printed += row_size - (i % row_size);
+      i++;
+    }
     // line wrap
-    if (i % row_size == 0)
+    if (i % row_size == 0 && row_count < num_rows)
       lcd.setCursor(0, start_row + row_count++);
     // print character
-    if (force && buf[i] == 0) // if force, substitute nulls with spaces
+    if (buf[i] == 0) // always substitute nulls with spaces
       lcd.write(' ');
     else
       lcd.write(buf[i]);
@@ -692,7 +709,7 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
 char keypad_wait()
 {
   if (led_enabled)
-    digitalWrite(LED_STATUS, HIGH); // indicate waiting for input
+    digitalWrite(LED_WAIT, HIGH); // indicate waiting for input
   while (true)
   {
     if (serial)
@@ -700,14 +717,14 @@ char keypad_wait()
       unsigned char ch_s = Serial.read();
       if (ch_s != 255)
       {
-        digitalWrite(LED_STATUS, LOW);
+        digitalWrite(LED_WAIT, LOW);
         return ch_s;
       }
     }
     unsigned char ch_k = kpd.getKey();
     if (ch_k != 0)
     {
-      digitalWrite(LED_STATUS, LOW);
+      digitalWrite(LED_WAIT, LOW);
       return ch_k;
     }
     delay(10);
@@ -765,4 +782,14 @@ byte *ee_read(uint16_t address, byte *ptr, int num)
   }
   return orig_ptr; // for convenience
 }
+
+/* ===== LCD_Driver class ===== */
+// Note: should handle cursor movement, screen scrolling and printing
+class LCD_Driver
+{
+public:
+  int d_root, d_pos[2], d_offset;
+  LCD_Driver();
+};
+
 #endif

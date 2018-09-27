@@ -32,6 +32,7 @@ const char *MAIN_SETTINGS[] = {
     "Fancy delay",
     "Login PW on/off",
     "Admin password",
+    "Device name",
     "Reset device",
 };
 void sys_settings()
@@ -61,8 +62,27 @@ void sys_settings()
   }
   else if (MAIN_SETTINGS[s] == "Admin password")
   {
-    buffered_editor(conf->admin_pass, 0, 0, 0, "Admin PW");
-    print_message("PW on/off: %s", DEFAULT_DELAY_TIME, conf->admin_pass);
+    char buf[MAX_PASS_LEN] = {};
+    int res = password(conf->admin_pass, "Curr Admin PW");
+    if (res == 1)
+    {
+      memset(buf, 0, MAX_PASS_LEN);
+      buffered_editor(buf, 0, 0, 0, "New PW");
+      if (strtol(buf, NULL, 10) == 0)
+        print_message("Invalid PW!", DEFAULT_DELAY_TIME);
+      else
+      {
+        strncpy(conf->admin_pass, buf, strlen(buf));
+        print_message("New PW:\n%s", DEFAULT_DELAY_TIME, conf->admin_pass);
+      }
+    }
+    else
+      print_message("Failed!", DEFAULT_DELAY_TIME);
+  }
+  else if (MAIN_SETTINGS[s] == "Device name")
+  {
+    buffered_editor(conf->admin_pass, 0, 0, 0, "Dev Name");
+    print_message("Device name:\n%s", DEFAULT_DELAY_TIME, conf->device_name);
   }
   else if (MAIN_SETTINGS[s] == "Reset device")
   {
@@ -76,7 +96,7 @@ void sys_settings()
 const int PROGRAM_LIST_LEN = 2;
 const char *PROGRAM_NAMES[] = {
     "Test Program",
-    "Settings",
+    "System Settings",
 };
 void (*program_ptrs[])() = {
     &test_program,

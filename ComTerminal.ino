@@ -13,9 +13,9 @@
 void setup() // Note: keeping setup explicit
 {
   // setup LED pins
-  pinMode(LED_STATUS, OUTPUT);
+  pinMode(LED_WAIT, OUTPUT);
   pinMode(LED_WORK, OUTPUT);
-  digitalWrite(LED_STATUS, LOW);
+  digitalWrite(LED_WAIT, LOW);
   digitalWrite(LED_WORK, LOW);
 
   // set up display/serial
@@ -48,7 +48,7 @@ void setup() // Note: keeping setup explicit
   // Print welcome message and request password
   if (conf->splash)
   {
-    print_message("M.A.S. Testing!", 2000);
+    print_message("M.A.S. Testing\n%s", 2000);
   }
 
   // handle bootup password
@@ -61,21 +61,17 @@ void setup() // Note: keeping setup explicit
     else if (res == -1)
       print_message("PASSWD INCORRECT", 1000);
     else if (res == -2)
-      print_message("PASSWORD REQ'D  FOR LOGIN", 1000);
+      print_message("PASSWORD REQ'D\nFOR LOGIN", 1000);
   }
   if (conf->splash)
-  {
     print_message("    Welcome!    ", 1000);
-  }
-  lcd.clear();
+
+  //
 }
 
 /*===== Main Loop =====*/
 void loop()
 {
   // menu
-  int item = menu(PROGRAM_NAMES, PROGRAM_LIST_LEN, 0, "Main Mnu");
-  // call program
-  if (item > -1)
-    (*(program_ptrs[item]))();
+  int item = menu(PROGRAM_NAMES, program_ptrs, PROGRAM_LIST_LEN, 0, "Program");
 }
