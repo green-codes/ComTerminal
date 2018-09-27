@@ -281,14 +281,16 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
       }
       case 3:
         lcd.noBlink();
-        free(buf);
+        if (!in_place)
+          free(buf);
         return -2;
       }
     }
     else if (ch == ED_EXIT_KEY)
     {
       lcd.noBlink();
-      free(buf);
+      if (!in_place)
+        free(buf);
       return -2;
     }
     else if (ch == ED_EDIT_KEY) // switch b/w editing and viewing
@@ -461,13 +463,6 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
             d_root += row_size;
           }
         }
-
-        // else
-        // { // erorr: mode not defined
-        //   print_message("Inpt Mthd DNE", 2000);
-        //   free(buf);
-        //   return -1;
-        // }
       }
     }
     else // viewing mode
