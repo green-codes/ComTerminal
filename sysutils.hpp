@@ -422,7 +422,7 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
           while (wait_count < IW_KEYPAD_WAIT)
           {
             lcd.setCursor(D_COLS - 4, D_ROWS - 1);
-            if (k != 0 && shift)
+            if (k > 1 && shift)
               lcd.print((char)(key_map[k] - 32));
             else
               lcd.print(key_map[k]);
@@ -584,8 +584,6 @@ int password(const char *true_pass, const char *prompt)
   }
   char pass_buf[MAX_PASS_LEN + 1] = {};
   int res = simple_input(pass_buf, MAX_PASS_LEN, prompt, true);
-  if (res == -2)
-    return -2;
   if (strcmp(pass_buf, true_pass) == 0)
   {
     conf->wrong_admin_pass_count = 0;
@@ -704,25 +702,27 @@ void hex_print(const char *data, int num)
 // simple input window, takes an input buffer
 int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
 {
-  // limit edit length to one row
-  bufsize = bufsize > D_COLS ? D_COLS : bufsize;
-  // prompt
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(prompt ? prompt : "Input:");
-  lcd.setCursor(0, 1);
-  lcd.blink();
-
+  bufsize = bufsize > D_COLS ? D_COLS : bufsize; // limit bufsize to one row
   int count = 0;
+  lcd.blink();
   while (count < bufsize)
   {
+    // prompt
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(prompt ? prompt : "Input:");
+    lcd.setCursor(0, 1);
+    lcd.print(buf);
     char ch = keypad_wait();
     if (ch == '*')
-      return -2;
-    if (ch == '#')
+      buf[--count] = 0;
+    else if (ch == '#')
       break;
-    buf[count++] = ch;
-    lcd.print(is_pw ? '*' : ch);
+    else if (isdigit(ch))
+    {
+      buf[count++] = ch;
+      lcd.print(is_pw ? '*' : ch);
+    }
   }
   lcd.noBlink();
   return 0;

@@ -42,7 +42,7 @@ bool reset_conf = 1;
 typedef struct
 {
     // system configs
-    bool splash = 1;
+    bool splash = 0;
     bool fancy = 0;
     int fancy_delay = 20;                       // in milliseconds
     char req_pass = 0;                          // require password
@@ -158,7 +158,7 @@ const char IW_DEC_MAP[] = {'+', '-', '*', '/', '.', '='};
 const char IW_HEX_MAP[] = {'A', 'B', 'C', 'D', 'E', 'F', 'x'};
 const char IW_KEYPAD_MAP[10][6] = { // null-terminate for wrapping
     {'0', ' ', ',', '.'},
-    {'1'},
+    {'1', '!', '?', '"'},
     {'2', 'a', 'b', 'c'},
     {'3', 'd', 'e', 'f'},
     {'4', 'g', 'h', 'i'},

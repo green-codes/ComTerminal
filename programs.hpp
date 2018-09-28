@@ -46,18 +46,18 @@ void file_editor()
     buffered_editor(filename, 12, 0, 0, 1, 1, "File:");
     // read file
     digitalWrite(LED_IO, HIGH);
-    File f = SD.open(filename, FILE_WRITE);
+    File f = SD.open(filename, FILE_READ);
     f.read(buf, MAX_BUFSIZE);
     f.close();
     digitalWrite(LED_IO, LOW);
     // open editor (in-place buffer)
-    buffered_editor(buf, 0, 0, 0, 0, 1, NULL);
+    buffered_editor(buf, MAX_BUFSIZE, 0, 0, 0, 1, NULL);
     // save to file?
     if (simple_input("Save file?"))
     {
       digitalWrite(LED_IO, HIGH);
       SD.remove(filename); // only way to overwrite a file...
-      f = SD.open(filename);
+      f = SD.open(filename, FILE_WRITE);
       f.write(buf);
       f.close();
       digitalWrite(LED_IO, LOW);
