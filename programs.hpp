@@ -21,10 +21,28 @@ void test_program()
   int v_res = buffered_editor(view1, DEFAULT_BUFSIZE, 0, 0, 0, 1, NULL);
 
   print_message(view1, DEFAULT_DELAY_TIME);
+
+  if (SD.begin(PA4))
+  {
+    print_message("SD test: %d", DEFAULT_DELAY_TIME, SD.exists("Test.txt"));
+    SD.mkdir("test");
+    SD.end();
+  }
+  else
+    print_message("Failed to connect SD", 1000);
+}
+
+// SD file editor
+void file_editor()
+{
+  if (SD.begin(SD_CS_PIN))
+  {
+    //
+  }
 }
 
 /* System settings menu */
-const int MAIN_SETTINGS_LEN = 6;
+const int MAIN_SETTINGS_LEN = 7;
 const char *MAIN_SETTINGS[] = {
     "Splash on/off",
     "Fancy on/off",
@@ -79,7 +97,7 @@ void sys_settings()
   }
   else if (MAIN_SETTINGS[s] == "Device name")
   {
-    buffered_editor(conf->device_name, 0, 0, 0, 1, 0, "Dev Name");
+    buffered_editor(conf->device_name, MAX_NAME_LEN, 0, 0, 0, 0, "Dev Name");
     print_message("Device name:\n%s", DEFAULT_DELAY_TIME, conf->device_name);
   }
   else if (MAIN_SETTINGS[s] == "Reset device")
@@ -89,8 +107,8 @@ void sys_settings()
   write_config();
 }
 
-/*===== function list/pointers =====*/
-// Useful for calling functions from main menu
+/*===== program list/pointers =====*/
+// Useful for calling programs from main menu
 const int PROGRAM_LIST_LEN = 2;
 const char *PROGRAM_NAMES[] = {
     "Test Program",

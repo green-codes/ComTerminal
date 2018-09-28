@@ -11,7 +11,7 @@
 #include "data.h"
 
 /* generic menu */
-// returns -1 for invalid selections
+// TODO: port for larger LCDs
 int menu(const char **items, int num_items, int default_pos, char *prompt)
 {
   // check params
@@ -19,16 +19,18 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
     return -1;
 
   // set up vars
-  int pos = default_pos;
+  int pos = default_pos;    // selected item
+  int d_root = default_pos; // first item on display
   char sel_buf[4] = {};
   byte sel_pos = 0;
 
   // loop
+  lcd.blink();
   while (true)
   {
     // prompt
     lcd.clear();
-    (prompt) ? lcd.print(prompt) : lcd.print("Menu");
+    lcd.print(prompt ? prompt : "Menu");
     lcd.print(":");
     lcd.print(pos + 1);
     lcd.print('/');
@@ -38,24 +40,35 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
     lcd.print(" ___");
     lcd.setCursor(D_COLS - 3, 0);
     lcd.print(sel_buf);
-    // menu item
-    lcd.setCursor(0, 1);
-    lcd.print(items[pos]);
+    // menu items
+    for (int i = 0; i < num_items && i < D_ROWS - 1; i++)
+    {
+      lcd.setCursor(0, 1 + i);
+      lcd.print(items[d_root + i]);
+    }
+    // handle cursor
+    lcd.setCursor(0, 1 + pos - d_root);
 
     // handle input
     char ch = keypad_wait();
     if (ch == M_ENTER_KEY)
     {
+      lcd.noBlink();
       return pos; // return selection
     }
     else if (ch == M_EXIT_KEY || ch == M_MENU_KEY)
     {
+      lcd.noBlink();
       return -1; // exit code
     }
     else if (ch == M_UP_KEY)
+    {
       pos > 0 ? pos-- : pos = num_items - 1;
+    }
     else if (ch == M_DOWN_KEY)
+    {
       pos < num_items - 1 ? pos++ : pos = 0;
+    }
     else if (ch == M_CLEAR_KEY) // clear selection
     {
       pos = 0;
@@ -70,6 +83,9 @@ int menu(const char **items, int num_items, int default_pos, char *prompt)
       if (read_pos <= num_items && read_pos > 0)
         pos = read_pos - 1;
     }
+    // handle d_root
+    pos < d_root ? d_root = pos : NULL;
+    pos > d_root + D_ROWS - 2 ? d_root = pos - (D_ROWS - 2) : NULL;
   }
 }
 int menu(const char **items, void (**functions)(), int num_items,

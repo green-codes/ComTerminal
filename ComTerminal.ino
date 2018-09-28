@@ -13,13 +13,21 @@
 void setup() // Note: keeping setup explicit
 {
   // setup LED pins
+  // TODO: setup a I2c I/O expander for all LEDs except PC13
   pinMode(LED_WAIT, OUTPUT);
-  pinMode(LED_WORK, OUTPUT);
+  pinMode(LED_STATUS, OUTPUT);
   digitalWrite(LED_WAIT, LOW);
-  digitalWrite(LED_WORK, LOW);
+  digitalWrite(LED_STATUS, LOW);
+
+  // setup external I/O interrupt
+  // TODO: debug
+  // modes: RISING, FALLING, CHANGE
+  pinMode(PA0, INPUT_PULLDOWN);
+  attachInterrupt(PA0, test_program, RISING);
 
   // set up display/serial
   lcd.begin(D_COLS, D_ROWS);
+  lcd.clear();
   if (serial)
   {
     Serial.begin(9600);
@@ -63,10 +71,8 @@ void setup() // Note: keeping setup explicit
     else if (res == -2)
       print_message("PASSWORD REQ'D\nFOR LOGIN", 1000);
   }
-  if (conf->splash)
-    print_message("    Welcome!    ", 1000);
 
-  //
+  // DEBUG stuff
 }
 
 /*===== Main Loop =====*/

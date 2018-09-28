@@ -17,6 +17,7 @@
 // STM32Duino libs
 #include <libmaple/nvic.h> // stm32f1 reset
 #include <EEPROM.h>
+#include <RTClock.h>
 #include <Wire.h>
 #include <SPI.h>
 
@@ -31,40 +32,45 @@
 bool led_enabled = 1;
 bool serial = 1;
 bool debug = 1;
-bool reset_EEPROM = 0;
-bool reset_conf = 0;
-
-/*===== general configs =====*/
-
-const int MAX_PASS_LEN = 16; // maximum password length
-const int MAX_PASS_FAILS = 10;
-const int MAX_NAME_LEN = 10;
-
-// LED configs
-const int LED_WORK = PC13;
-const int LED_WAIT = PC14;
+bool reset_EEPROM = 1;
+bool reset_conf = 1;
 
 /* ===== programmable configs ===== */
+#define MAX_PASS_LEN 16
+#define MAX_PASS_FAILS 10
+#define MAX_NAME_LEN 10
 typedef struct
 {
-  // system configs
-  bool splash = 0;
-  bool fancy = 1;
-  int fancy_delay = 20;                       // in milliseconds
-  char req_pass = 0;                          // require password
-  char admin_pass[MAX_PASS_LEN + 1] = "0042"; // admin password
-  char device_name[MAX_NAME_LEN + 1] = "mas-tp00x";
-  int wrong_admin_pass_count = 0; // number of failed password attempts
-  // app configs
-  int placeholder;
+    // system configs
+    bool splash = 0;
+    bool fancy = 0;
+    int fancy_delay = 20;                       // in milliseconds
+    char req_pass = 0;                          // require password
+    char admin_pass[MAX_PASS_LEN + 1] = "0042"; // admin password
+    char device_name[MAX_NAME_LEN + 1] = "mas-tp00x";
+    int wrong_admin_pass_count = 0; // number of failed password attempts
+    // app configs
+    int placeholder;
 } CT_Config;
 const uint16_t CONFIG_ADDRESS = 0x0;
 const int CONFIG_LEN = sizeof(CT_Config);
 
+/* ===== SD Card config ===== */
+#define SD_CS_PIN PA4
+
+/* ===== LED configs ===== */
+#define LED_STATUS PC13
+#define LED_WAIT PC14
+
 /* ===== display configs ===== */
-const uint8_t D_COLS = 16, D_ROWS = 2; // display dimensions
-const int LCD_RS = PA2, LCD_EN = PA3,
-          LCD_D4 = PB11, LCD_D5 = PB10, LCD_D6 = PB1, LCD_D7 = PB0;
+#define D_COLS 16
+#define D_ROWS 2
+#define LCD_RS PA2
+#define LCD_EN PA3
+#define LCD_D4 PB11
+#define LCD_D5 PB10
+#define LCD_D6 PB1
+#define LCD_D7 PB0
 
 /* ===== keypad configs ===== */
 const byte KEYPAD_ROWS = 4, KEYPAD_COLS = 4;
@@ -79,6 +85,7 @@ byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB12, PB13, PB14, PB15};
 const int DEFAULT_DELAY_TIME = 1000;
 
 /*===== global vars =====*/
+//RTClock rtc(RTCSEL_LSE);
 LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // see docs
 Keypad kpd = Keypad(makeKeymap(KEYPAD_KEYS), KEYPAD_ROW_PINS, KEYPAD_COL_PINS,
                     KEYPAD_ROWS, KEYPAD_COLS);
@@ -88,14 +95,16 @@ unsigned long work_started_millis; // record start time for last task
 /* ===== sysutils configs ===== */
 
 // menu function configs
-const char M_UP_KEY = 'A';
-const char M_DOWN_KEY = 'B';
-const char M_MENU_KEY = 'C';
-const char M_EXIT_KEY = 'D';
-const char M_CLEAR_KEY = '*';
-const char M_ENTER_KEY = '#';
+#define M_UP_KEY 'A'
+#define M_DOWN_KEY 'B'
+#define M_MENU_KEY 'C'
+#define M_EXIT_KEY 'D'
+#define M_CLEAR_KEY '*'
+#define M_ENTER_KEY '#'
 
 // Editor configs
+#define DEFAULT_BUFSIZE 63
+#define MAX_BUFSIZE 1023
 /* modes
     0: 'View' (normal) mode, view null-terminated strings
     1: 'Force' mode, view entire memory region given by bufsize
@@ -113,22 +122,20 @@ const char *ED_SETTINGS[] = {
     "Force Mode?",
     "Insert/Replace?",
 };
-const char ED_MENU_KEY = 'C';
-const char ED_EXIT_KEY = 'D';
-const char ED_EDIT_KEY = '#';
+#define ED_MENU_KEY 'C'
+#define ED_EXIT_KEY 'D'
+#define ED_EDIT_KEY '#'
 
 // viewing mode configs
-const char VW_MODE_KEY = 'A';
-const char VW_HEX_KEY = 'B';
-const char VW_LEFT_KEY = '4';
-const char VW_RIGHT_KEY = '6';
-const char VW_UP_KEY = '2';
-const char VW_DOWN_KEY = '8';
-const char VW_HOME_KEY = '1';
-const char VW_END_KEY = '3';
+#define VW_MODE_KEY 'A'
+#define VW_HEX_KEY 'B'
+#define VW_LEFT_KEY '4'
+#define VW_RIGHT_KEY '6'
+#define VW_UP_KEY '2'
+#define VW_DOWN_KEY '8'
+#define VW_HOME_KEY '1'
+#define VW_END_KEY '3'
 
-// editing mode configs
-const int DEFAULT_BUFSIZE = 63, MAX_BUFSIZE = 1023;
 /* input modes
     0: 'Insert' mode
     1: 'Replace' mode
@@ -140,13 +147,13 @@ const char IW_MODES[] = {'I', 'R'};
     2: Keypad: basic 9-key alphanumeric input
     3: ASCII: Hexidecimal ASCII
 */
+#define IW_MODE_KEY 'A'
+#define IW_SHIFT_KEY 'B'
+#define IW_DEL_KEY '*'
+#define IW_KEYPAD_WAIT 500 // rough, in milliseconds
 const char IW_INPUT_METHODS[] = {'D', 'H', 'K', 'A'};
-const char IW_MODE_KEY = 'A';
-const char IW_SHIFT_KEY = 'B';
-const char IW_DEL_KEY = '*';
 const char IW_DEC_MAP[] = {'+', '-', '*', '/', '.', '='};
 const char IW_HEX_MAP[] = {'A', 'B', 'C', 'D', 'E', 'F', 'x'};
-const int IW_KEYPAD_WAIT = 500;     // rough, in milliseconds
 const char IW_KEYPAD_MAP[10][6] = { // null-terminate for wrapping
     {'0', ' ', ',', '.'},
     {'1'},
@@ -163,6 +170,7 @@ const char IW_KEYPAD_MAP[10][6] = { // null-terminate for wrapping
 
 /* generic menu
     Returns the selected entry, or -1 if user exits menu
+    if given a list of function pointers, call selected functions
 */
 int menu(const char **items, int num_items, int default_pos, char *prompt);
 int menu(const char **items, const void (**programs)(), int num_items,
@@ -171,6 +179,7 @@ int menu(const char **items, const void (**programs)(), int num_items,
 /* view window: basic character viewer
     Params
       bufsize: 0 for strlen(buf)
+      ed_mode: View (0) or Force (1) mode
     Returns
       1: success
       -1: failure
@@ -220,6 +229,10 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
 char keypad_wait();
 
 /* ===== System functions ===== */
+
+// LED writing using I2C port expanders
+// Note: PC13 should be redirected to digitalWrite()
+void led_write();
 
 // system reset
 void reset_system();
