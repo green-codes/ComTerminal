@@ -282,17 +282,9 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
       {
         int s = menu(ED_SETTINGS, ED_SETTINGS_LEN, 0, "Settings");
         if (s == 0) // view V/F mode switch
-        {
-          char op_buf[2] = {};
-          simple_input(op_buf, 1, "Force 0/1", false);
-          (strtol(op_buf, NULL, 10)) ? ed_mode = 1 : ed_mode = 0;
-        }
+          simple_input("Force 0/1") ? ed_mode = 1 : ed_mode = 0;
         if (s == 1) // input I/R mode switch
-        {
-          char op_buf[2] = {};
-          simple_input(op_buf, 1, "I=0 R=1", false);
-          (strtol(op_buf, NULL, 10)) ? iw_mode = 1 : iw_mode = 0;
-        }
+          simple_input("I=0 R=1") ? iw_mode = 1 : iw_mode = 0;
         break;
       }
       case 3:
@@ -619,13 +611,16 @@ void print_lines(char *const buf, int bufsize, byte force,
   for (int i = 0; i < bufsize && num_printed < num_rows * row_size; i++)
   {
     // handle new line character
-    if (buf[i] == '\n')
-    {
-      if (row_count < num_rows)
-        lcd.setCursor(0, start_row + row_count++);
-      num_printed += row_size - (i % row_size);
-      i++;
-    }
+    // TODO: breaks buffered_editor
+    // if (buf[i] == '\n')
+    // {
+    //   if (row_count < num_rows)
+    //     lcd.setCursor(0, start_row + row_count++);
+    //   num_printed += row_size - (i % row_size);
+    //   i++;
+    // }
+    // else
+    num_printed++;
     // line wrap
     if (i % row_size == 0 && row_count < num_rows)
       lcd.setCursor(0, start_row + row_count++);
@@ -709,6 +704,8 @@ void hex_print(const char *data, int num)
 // simple input window, takes an input buffer
 int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
 {
+  // limit edit length to one row
+  bufsize = bufsize > D_COLS ? D_COLS : bufsize;
   // prompt
   lcd.clear();
   lcd.setCursor(0, 0);
@@ -729,6 +726,12 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
   }
   lcd.noBlink();
   return 0;
+}
+int simple_input(const char *prompt)
+{
+  char buf[D_COLS + 1] = {};
+  simple_input(buf, D_COLS, prompt, 0);
+  return strtol(buf, NULL, 10);
 }
 
 // wait for keypad input
@@ -758,6 +761,11 @@ char keypad_wait()
 }
 
 /* ===== System functions ===== */
+
+void handle_exi()
+{
+  print_message("Interrput!", 1000);
+}
 
 void reset_system()
 {

@@ -22,8 +22,8 @@ void setup() // Note: keeping setup explicit
   // setup external I/O interrupt
   // TODO: debug
   // modes: RISING, FALLING, CHANGE
-  pinMode(PA0, INPUT_PULLDOWN);
-  attachInterrupt(PA0, test_program, RISING);
+  pinMode(PA0, INPUT_PULLUP);
+  attachInterrupt(PA0, handle_exi, FALLING);
 
   // set up display/serial
   lcd.begin(D_COLS, D_ROWS);
@@ -56,7 +56,7 @@ void setup() // Note: keeping setup explicit
   // Print welcome message and request password
   if (conf->splash)
   {
-    print_message("M.A.S. Testing\n%s", 2000, conf->device_name);
+    print_message("M.A.S. Testing  %s", 2000, conf->device_name);
   }
 
   // handle bootup password

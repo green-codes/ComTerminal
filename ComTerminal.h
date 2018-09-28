@@ -42,7 +42,7 @@ bool reset_conf = 1;
 typedef struct
 {
     // system configs
-    bool splash = 0;
+    bool splash = 1;
     bool fancy = 0;
     int fancy_delay = 20;                       // in milliseconds
     char req_pass = 0;                          // require password
@@ -61,6 +61,8 @@ const int CONFIG_LEN = sizeof(CT_Config);
 /* ===== LED configs ===== */
 #define LED_STATUS PC13
 #define LED_WAIT PC14
+#define LED_IO PC13  //TODO
+#define LED_INT PC13 //TODO
 
 /* ===== display configs ===== */
 #define D_COLS 16
@@ -223,6 +225,8 @@ void hex_print(const char *data, int num);
 // simple input prompt, decimal only
 // returns 0 on normal return, -2 on user exit (buffer may be modified)
 int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
+// returns int from user; useful for binary or short numeric inputs
+int simple_input(const char *prompt);
 
 // wait for keypad input
 // NOTE: this hangs the main program loop
@@ -233,6 +237,9 @@ char keypad_wait();
 // LED writing using I2C port expanders
 // Note: PC13 should be redirected to digitalWrite()
 void led_write();
+
+// external interrupt handler
+void handle_exi();
 
 // system reset
 void reset_system();

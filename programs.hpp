@@ -12,21 +12,24 @@
 #include "sysutils.hpp"
 #include "data.h"
 
-/*===== functions =====*/
+/*===== programs =====*/
 
 // placeholder
 void test_program()
 {
-  char view1[DEFAULT_BUFSIZE] = "Ministry of Arcane Sciences, United Equestria.";
-  int v_res = buffered_editor(view1, DEFAULT_BUFSIZE, 0, 0, 0, 1, NULL);
-
-  print_message(view1, DEFAULT_DELAY_TIME);
-
   if (SD.begin(PA4))
   {
-    print_message("SD test: %d", DEFAULT_DELAY_TIME, SD.exists("Test.txt"));
-    SD.mkdir("test");
+    digitalWrite(LED_IO, HIGH);
+    File f = SD.open("Test3.txt", FILE_WRITE);
+    for (int i = 0; i < INT16_MAX; i++)
+      f.println(i);
+    f.close();
+    f = SD.open("Test3.txt");
+    int res = f.size();
+    f.close();
     SD.end();
+    digitalWrite(LED_IO, LOW);
+    print_message("SD test: %d", DEFAULT_DELAY_TIME, res);
   }
   else
     print_message("Failed to connect SD", 1000);
@@ -37,8 +40,32 @@ void file_editor()
 {
   if (SD.begin(SD_CS_PIN))
   {
-    //
+    char filename[13] = {};
+    char buf[MAX_BUFSIZE] = {};
+    // get filename
+    buffered_editor(filename, 12, 0, 0, 1, 1, "File:");
+    // read file
+    digitalWrite(LED_IO, HIGH);
+    File f = SD.open(filename, FILE_WRITE);
+    f.read(buf, MAX_BUFSIZE);
+    f.close();
+    digitalWrite(LED_IO, LOW);
+    // open editor (in-place buffer)
+    buffered_editor(buf, 0, 0, 0, 0, 1, NULL);
+    // save to file?
+    if (simple_input("Save file?"))
+    {
+      digitalWrite(LED_IO, HIGH);
+      SD.remove(filename); // only way to overwrite a file...
+      f = SD.open(filename);
+      f.write(buf);
+      f.close();
+      digitalWrite(LED_IO, LOW);
+    }
+    SD.end();
   }
+  else
+    print_message("Failed to initialize SD card", 1000);
 }
 
 /* System settings menu */
@@ -67,9 +94,7 @@ void sys_settings()
   }
   else if (MAIN_SETTINGS[s] == "Fancy delay")
   {
-    char buf[DEFAULT_BUFSIZE] = {};
-    simple_input(buf, DEFAULT_BUFSIZE, "Fancy delay:", false);
-    conf->fancy_delay = strtol(buf, NULL, 10);
+    conf->fancy_delay = simple_input("Fancy delay:");
     print_message("Fancy delay: %d", DEFAULT_DELAY_TIME, conf->fancy_delay);
   }
   else if (MAIN_SETTINGS[s] == "Login PW on/off")
@@ -109,13 +134,15 @@ void sys_settings()
 
 /*===== program list/pointers =====*/
 // Useful for calling programs from main menu
-const int PROGRAM_LIST_LEN = 2;
+const int PROGRAM_LIST_LEN = 3; // CHANGE ME!
 const char *PROGRAM_NAMES[] = {
     "Test Program",
+    "File Editor",
     "System Settings",
 };
 void (*program_ptrs[])() = {
     &test_program,
+    &file_editor,
     &sys_settings,
 };
 
