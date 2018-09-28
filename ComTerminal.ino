@@ -56,7 +56,7 @@ void setup() // Note: keeping setup explicit
   // Print welcome message and request password
   if (conf->splash)
   {
-    print_message("M.A.S. Testing  %s", 2000, conf->device_name);
+    print_message((char *)TEST_STR, 2000, conf->device_name);
   }
 
   // handle bootup password
@@ -79,5 +79,5 @@ void setup() // Note: keeping setup explicit
 void loop()
 {
   // menu
-  int item = menu(PROGRAM_NAMES, program_ptrs, PROGRAM_LIST_LEN, 0, "Program");
+  menu(PROGRAM_NAMES, program_ptrs, PROGRAM_LIST_LEN, 0, "Program");
 }

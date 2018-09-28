@@ -94,8 +94,10 @@ int menu(const char **items, void (**functions)(), int num_items,
   // get function selection
   int s = menu(items, num_items, default_pos, prompt);
   // run function if valid
-  if (s > -1)
+  if (s > -1 && functions[s])
     (*functions[s])();
+  else
+    return -1; // exit code
 }
 
 /* buffered editor: safely view and edit buffers */
@@ -253,9 +255,9 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
       case 0: // save: dump buf to in_buf
       {
         if (read_only)
-          print_message("Read only!", DEFAULT_DELAY_TIME);
+          print_message((char *)F("Read only!"), DEFAULT_DELAY_TIME);
         else if (in_place)
-          print_message("Editing in-place!", DEFAULT_DELAY_TIME);
+          print_message((char *)F("Editing in-place"), DEFAULT_DELAY_TIME);
         else
         {
           memcpy(in_buf, buf, bufsize);
@@ -265,9 +267,9 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
       }
       case 1: // Revert changes
         if (read_only)
-          print_message("Read only!", DEFAULT_DELAY_TIME);
+          print_message((char *)F("Read only!"), DEFAULT_DELAY_TIME);
         else if (in_place)
-          print_message("Editing in-place!", DEFAULT_DELAY_TIME);
+          print_message((char *)F("Editing in-place"), DEFAULT_DELAY_TIME);
         else // copy contents from in_buf
         {
           free(buf);
@@ -280,11 +282,11 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
         break;
       case 2: // settings
       {
-        int s = menu(ED_SETTINGS, ED_SETTINGS_LEN, 0, "Settings");
+        int s = menu(ED_SETTINGS, ED_SETTINGS_LEN, 0, (char *)F("Settings"));
         if (s == 0) // view V/F mode switch
-          simple_input("Force 0/1") ? ed_mode = 1 : ed_mode = 0;
+          simple_input((char *)F("Force 0/1")) ? ed_mode = 1 : ed_mode = 0;
         if (s == 1) // input I/R mode switch
-          simple_input("I=0 R=1") ? iw_mode = 1 : iw_mode = 0;
+          simple_input((char *)F("I=0 R=1")) ? iw_mode = 1 : iw_mode = 0;
         break;
       }
       case 3:
@@ -422,7 +424,7 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
           while (wait_count < IW_KEYPAD_WAIT)
           {
             lcd.setCursor(D_COLS - 4, D_ROWS - 1);
-            if (k > 1 && shift)
+            if (k && shift)
               lcd.print((char)(key_map[k] - 32));
             else
               lcd.print(key_map[k]);
@@ -571,14 +573,14 @@ int password(const char *true_pass, const char *prompt)
     return -1;
   if (conf->wrong_admin_pass_count >= MAX_PASS_FAILS)
   { // locking system
-    print_message("System Locked", 0);
+    print_message((char *)F("System Locked"), 0);
     while (true)
       delay(100);
   }
   if (conf->wrong_admin_pass_count > 0)
   {
     char temp[16] = "";
-    sprintf(temp, "PW Retries: %d",
+    sprintf(temp, (char *)F("PW Retries: %d"),
             MAX_PASS_FAILS - conf->wrong_admin_pass_count);
     print_message(temp, DEFAULT_DELAY_TIME);
   }
@@ -637,7 +639,7 @@ void print_line(char *const buf, byte force, int start_row)
 // simple message viewer
 void print_message(char *format, int message_delay, ...)
 {
-  char *p_buf = (char *)calloc(1, strlen(format) + DEFAULT_BUFSIZE);
+  char *p_buf = (char *)calloc(strlen(format) + DEFAULT_BUFSIZE, 1);
   va_list args;
   va_start(args, format);
   vsprintf(p_buf, format, args);
@@ -710,13 +712,17 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
     // prompt
     lcd.clear();
     lcd.setCursor(0, 0);
-    lcd.print(prompt ? prompt : "Input:");
+    lcd.print(prompt ? prompt : (char *)F("Input:"));
     lcd.setCursor(0, 1);
     lcd.print(buf);
     char ch = keypad_wait();
-    if (ch == '*')
+    if (ch == 'A')
+      buf[count++] = '+';
+    else if (ch == 'B')
+      buf[count++] = '-';
+    else if (ch == '*')
       buf[--count] = 0;
-    else if (ch == '#')
+    else if (ch == '#' || ch == 'D')
       break;
     else if (isdigit(ch))
     {
@@ -762,14 +768,21 @@ char keypad_wait()
 
 /* ===== System functions ===== */
 
+void led_write(uint8 pin, uint8 value)
+{
+  //if (pin != LED_STATUS)
+  digitalWrite(pin, value);
+  // TODO
+}
+
 void handle_exi()
 {
-  print_message("Interrput!", 1000);
+  print_message((char *)F("Interrput!"), 1000);
 }
 
 void reset_system()
 {
-  print_message("Reseting system", 0);
+  print_message((char *)F("Reseting system"), 0);
   nvic_sys_reset();
 }
 

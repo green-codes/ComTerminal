@@ -28,6 +28,8 @@
 #include <SD.h>
 //#include "MPU6050.h"
 
+const char TEST_STR[] PROGMEM = "M.A.S. Testing  %s";
+
 /*===== debug configs =====*/
 bool led_enabled = 1;
 bool serial = 1;
@@ -39,7 +41,7 @@ bool reset_conf = 1;
 #define MAX_PASS_LEN 16
 #define MAX_PASS_FAILS 10
 #define MAX_NAME_LEN 10
-typedef struct
+typedef struct CT_Config
 {
     // system configs
     bool splash = 0;
@@ -236,7 +238,7 @@ char keypad_wait();
 
 // LED writing using I2C port expanders
 // Note: PC13 should be redirected to digitalWrite()
-void led_write();
+void led_write(uint8 pin, uint8 value);
 
 // external interrupt handler
 void handle_exi();
