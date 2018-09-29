@@ -743,7 +743,7 @@ int simple_input(const char *prompt)
 // wait for keypad input
 char keypad_wait()
 {
-  if (led_enabled)
+  if (led_enable)
     digitalWrite(LED_WAIT, HIGH); // indicate waiting for input
   while (true)
   {
@@ -777,7 +777,8 @@ void led_write(uint8 pin, uint8 value)
 
 void handle_exi()
 {
-  print_message((char *)F("Interrput!"), 1000);
+  // TODO
+  //reset_system();
 }
 
 void reset_system()

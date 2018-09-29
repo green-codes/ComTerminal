@@ -12,14 +12,17 @@
 #include "sysutils.hpp"
 #include "data.h"
 
+#include "MPU6050.h"
+
 /*===== programs =====*/
 
 // placeholder
 void test_program()
 {
-  if (!simple_input("Test SD Write?"))
+  if (!simple_input("Test MPU?"))
     return;
-  if (SD.begin(PA4))
+  MPU_readout res = MPU_request();
+  if (SD.begin(SD_CS_PIN))
   {
     led_write(LED_IO, HIGH);
     File f = SD.open("3", FILE_WRITE);

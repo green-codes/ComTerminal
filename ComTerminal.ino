@@ -9,6 +9,9 @@
 #include "sysutils.hpp"
 #include "programs.hpp"
 
+// additional hardware libraries
+#include "MPU6050.h"
+
 /* ===== Init ===== */
 void setup() // Note: keeping setup explicit
 {
@@ -16,8 +19,10 @@ void setup() // Note: keeping setup explicit
   // TODO: setup a I2c I/O expander for all LEDs except PC13
   pinMode(LED_WAIT, OUTPUT);
   pinMode(LED_STATUS, OUTPUT);
+  pinMode(LED_IO, OUTPUT);
   digitalWrite(LED_WAIT, LOW);
   digitalWrite(LED_STATUS, LOW);
+  digitalWrite(LED_IO, LOW);
 
   // setup external I/O interrupt
   // TODO: debug
@@ -52,6 +57,10 @@ void setup() // Note: keeping setup explicit
     print_message("Read conf...", 500);
     read_config();
   }
+
+  // init hardwares as necessary
+  if (MPU_enabled)
+    setupMPU();
 
   // Print welcome message and request password
   if (conf->splash)

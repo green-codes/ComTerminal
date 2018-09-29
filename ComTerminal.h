@@ -17,25 +17,26 @@
 // STM32Duino libs
 #include <libmaple/nvic.h> // stm32f1 reset
 #include <EEPROM.h>
+#include <HardwareTimer.h>
 #include <RTClock.h>
 #include <Wire.h>
 #include <SPI.h>
 
-// hardware libs
+// base hardware libs
 #include <LiquidCrystal.h>
 #include <Key.h>
 #include <Keypad.h>
 #include <SD.h>
-//#include "MPU6050.h"
 
 const char TEST_STR[] PROGMEM = "M.A.S. Testing  %s";
 
-/*===== debug configs =====*/
-bool led_enabled = 1;
+/*===== global configs =====*/
+bool led_enable = 1;
 bool serial = 1;
 bool debug = 1;
 bool reset_EEPROM = 1;
 bool reset_conf = 1;
+bool MPU_enabled = 1;
 
 /* ===== programmable configs ===== */
 #define MAX_PASS_LEN 16
@@ -63,7 +64,7 @@ const int CONFIG_LEN = sizeof(CT_Config);
 /* ===== LED configs ===== */
 #define LED_STATUS PC13
 #define LED_WAIT PC14
-#define LED_IO PC13  //TODO
+#define LED_IO PC15  //TODO
 #define LED_INT PC13 //TODO
 
 /* ===== display configs ===== */
