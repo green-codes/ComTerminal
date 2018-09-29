@@ -19,35 +19,13 @@
 // placeholder
 void test_program()
 {
-  if (!simple_input("Test MPU?"))
-    return;
   MPU_readout res = MPU_request();
-  if (SD.begin(SD_CS_PIN))
-  {
-    led_write(LED_IO, HIGH);
-    File f = SD.open("3", FILE_WRITE);
-    for (int i = 0; i < INT16_MAX; i++)
-      f.println(i);
-    f.close();
-    f = SD.open("3");
-    int res = f.size();
-    f.close();
-    SD.end();
-    led_write(LED_IO, LOW);
-    print_message("SD test: %d", DEFAULT_DELAY_TIME, res);
-  }
-  else
-    print_message("Failed to connect SD", 1000);
+  print_message("MPU: %f", DEFAULT_DELAY_TIME, res.temp);
 }
 
 // SD card operations
 void sd_ls()
 {
-  if (!SD.begin(SD_CS_PIN))
-  {
-    print_message((char *)F("Failed to initialize SD card"), DEFAULT_DELAY_TIME);
-    return;
-  }
   char dir[13] = "/";
   buffered_editor(dir, 12, 0, 0, 1, 1, (char *)F("Dir:"));
   if (!strlen(dir))
@@ -64,8 +42,7 @@ void sd_ls()
       lcd.print(f.name());
       if (f.isDirectory())
         lcd.print("/");
-      if (strlen(f.name()) < 12)
-        lcd.print(' ');
+      lcd.setCursor(D_COLS - 4, i);
       int s = f.size();
       if (s < 1024)
       {
@@ -89,15 +66,9 @@ void sd_ls()
     if (ch == IW_DEL_KEY || ch == ED_EXIT_KEY)
       break;
   }
-  SD.end();
 }
 void sd_cp()
 {
-  if (!SD.begin(SD_CS_PIN))
-  {
-    print_message((char *)F("Failed to initialize SD card"), DEFAULT_DELAY_TIME);
-    return;
-  }
   // open src file
   char src_filename[13] = {};
   buffered_editor(src_filename, 12, 0, 0, 1, 1, (char *)F("Src:"));
@@ -140,16 +111,10 @@ void sd_cp()
   dest_file.close();
   if (SD.exists(dest_filename))
     print_message((char *)F("File copied"), DEFAULT_DELAY_TIME);
-  SD.end();
   led_write(LED_IO, LOW);
 }
 void sd_rm()
 {
-  if (!SD.begin(SD_CS_PIN))
-  {
-    print_message((char *)F("Failed to initialize SD card"), DEFAULT_DELAY_TIME);
-    return;
-  }
   // open src file
   char filename[13] = {};
   buffered_editor(filename, 12, 0, 0, 1, 1, "rm:");
@@ -165,15 +130,9 @@ void sd_rm()
     else
       print_message((char *)F("Failed to remove"), DEFAULT_DELAY_TIME);
   }
-  SD.end();
 }
 void sd_mkdir()
 {
-  if (!SD.begin(SD_CS_PIN))
-  {
-    print_message((char *)F("Failed to initialize SD card"), DEFAULT_DELAY_TIME);
-    return;
-  }
   char dirname[9] = "";
   buffered_editor(dirname, 8, 0, 0, 1, 1, (char *)F("mkdir:"));
   if (SD.exists(dirname))
@@ -186,15 +145,9 @@ void sd_mkdir()
     if (SD.exists(dirname))
       print_message((char *)F("Dir created"), DEFAULT_DELAY_TIME);
   }
-  SD.end();
 }
 void sd_rmdir()
 {
-  if (!SD.begin(SD_CS_PIN))
-  {
-    print_message((char *)F("Failed to initialize SD card"), DEFAULT_DELAY_TIME);
-    return;
-  }
   char dirname[9] = "";
   buffered_editor(dirname, 8, 0, 0, 1, 1, (char *)F("rmdir:"));
   if (!SD.exists(dirname))
@@ -209,7 +162,6 @@ void sd_rmdir()
     else
       print_message((char *)F("Failed to remove"), DEFAULT_DELAY_TIME);
   }
-  SD.end();
 }
 const int SD_OPS_LEN = 5;
 const char *SD_OPS[] = {
@@ -228,8 +180,14 @@ void (*sd_ops[])() = {
 };
 void sd_ops_menu()
 {
+  if (!SD.begin(SD_CS_PIN))
+  {
+    print_message((char *)F("Failed to initialize SD"), DEFAULT_DELAY_TIME);
+    return;
+  }
   while (-1 != menu(SD_OPS, sd_ops, SD_OPS_LEN, 0, (char *)F("File ops")))
     0;
+  SD.end();
 }
 
 // SD file editor

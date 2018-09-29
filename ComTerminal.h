@@ -69,7 +69,7 @@ const int CONFIG_LEN = sizeof(CT_Config);
 
 /* ===== display configs ===== */
 #define D_COLS 16
-#define D_ROWS 2
+#define D_ROWS 4
 #define LCD_RS PA2
 #define LCD_EN PA3
 #define LCD_D4 PB11
