@@ -4,48 +4,51 @@
 
 */
 
-#include "ComTerminal.h"
+#include "base.h"
 #include "data.h"
-#include "sysutils.hpp"
+#include "devices.h"
+#include "sysutils.h"
 #include "programs.hpp"
-
-// additional hardware libraries
-#include "MPU6050.h"
 
 /* ===== Init ===== */
 void setup() // Note: keeping setup explicit
 {
-  // setup LED pins
-  // TODO: setup a I2c I/O expander for all LEDs except PC13
-  pinMode(LED_WAIT, OUTPUT);
-  pinMode(LED_STATUS, OUTPUT);
-  pinMode(LED_IO, OUTPUT);
-  digitalWrite(LED_WAIT, LOW);
-  digitalWrite(LED_STATUS, LOW);
-  digitalWrite(LED_IO, LOW);
-
-  // setup external I/O interrupt
-  // TODO: debug
-  // modes: RISING, FALLING, CHANGE
-  pinMode(PA0, INPUT_PULLUP);
-  attachInterrupt(PA0, handle_exi, FALLING);
-
   // set up display/serial
   lcd.begin(D_COLS, D_ROWS);
   lcd.clear();
   if (serial)
-  {
     Serial.begin(9600);
-    Serial.println("Starting serial");
-  }
 
+  // setup external I/O interrupt
+  pinMode(PA0, INPUT_PULLUP);
+  attachInterrupt(PA0, handle_exi, FALLING);
+
+  // setup the I2C interface
+  Wire.begin();
+
+  // setup MCP23008(s)
+  print_message("Init MCP...", 0);
+  mcp.begin(0); // address 0x20 + 0b000
+  print_message("MCP initialized", 500);
+
+  // init MPU6050
+  if (MPU_enabled)
+    setupMPU();
+
+  // setup LED pins
+  pinMode(LED_STATUS, OUTPUT);
+  digitalWrite(LED_STATUS, LOW);
+  mcp.pinMode(LED_WAIT, OUTPUT);
+  mcp.pinMode(LED_IO, OUTPUT);
+  mcp.digitalWrite(LED_WAIT, LOW);
+  mcp.digitalWrite(LED_IO, LOW);
+
+  // EEPROM and conf options
   if (reset_EEPROM)
   {
     print_message("Reset EEPROM...", 500);
     EEPROM.format();
   }
-
-  // get configs from flash storage?
   if (reset_conf)
   {
     print_message("Reset conf...", 500);
@@ -57,10 +60,6 @@ void setup() // Note: keeping setup explicit
     print_message("Read conf...", 500);
     read_config();
   }
-
-  // init hardwares as necessary
-  if (MPU_enabled)
-    setupMPU();
 
   // Print welcome message and request password
   if (conf->splash)

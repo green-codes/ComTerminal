@@ -8,22 +8,59 @@
 #ifndef PROGRAMS_HPP
 #define PROGRAMS_HPP
 
-#include "ComTerminal.h"
-#include "sysutils.hpp"
+#include "base.h"
+#include "devices.h"
+#include "sysutils.h"
 #include "data.h"
 
-#include "MPU6050.h"
-
-/*===== programs =====*/
-
-// placeholder
-void test_program()
+/*===== testing programs =====*/
+void test_MPU()
 {
+  if (!MPU_enabled)
+    return;
   MPU_readout res = MPU_request();
-  print_message("MPU: %f", DEFAULT_DELAY_TIME, res.temp);
+  print_message((char *)F("MPU: %f"), DEFAULT_DELAY_TIME, res.temp);
+}
+void test_SD()
+{
+  if (SD.begin())
+  {
+    print_message((char *)F("Writing to SD"), 0);
+    mcp.digitalWrite(LED_IO, HIGH);
+    File f = SD.open("3", FILE_WRITE);
+    for (int i = 0; i < UINT16_MAX; i++)
+      f.println(i);
+    print_message((char *)F("SD test: %d"), DEFAULT_DELAY_TIME, f.size());
+    f.close();
+  }
+  else
+    print_message((char *)F("Failed SD init!"), DEFAULT_DELAY_TIME);
+  SD.end();
+  mcp.digitalWrite(LED_IO, LOW);
+}
+void jmp_stub()
+{
+  // should have enough space on stack to jump to another program
+  print_message("Addr:0x%.8x", DEFAULT_DELAY_TIME, &jmp_stub);
+}
+const char *TEST_PGMS[] = {
+    "MPU test",
+    "SD write test",
+    "JMP STUB",
+};
+void (*test_pgms[])() = {
+    &test_MPU,
+    &test_SD,
+    &jmp_stub};
+const int TEST_PGMS_LEN = sizeof(test_pgms) / sizeof(void(*));
+void pgm_tests()
+{
+  while (-1 != menu(TEST_PGMS, test_pgms, TEST_PGMS_LEN,
+                    0, (char *)F("Tests")))
+    0;
 }
 
-// SD card operations
+/*===== SD card operations =====*/
 void sd_ls()
 {
   char dir[13] = "/";
@@ -35,7 +72,7 @@ void sd_ls()
   while (f)
   {
     lcd.clear();
-    led_write(LED_IO, HIGH);
+    mcp.digitalWrite(LED_IO, HIGH);
     for (int i = 0; f && i < D_ROWS; i++)
     {
       lcd.setCursor(0, i);
@@ -61,7 +98,7 @@ void sd_ls()
       }
       f = root.openNextFile();
     }
-    led_write(LED_IO, LOW);
+    mcp.digitalWrite(LED_IO, LOW);
     char ch = keypad_wait();
     if (ch == IW_DEL_KEY || ch == ED_EXIT_KEY)
       break;
@@ -100,18 +137,31 @@ void sd_cp()
     SD.end();
     return;
   }
-  // start copying (the slow way)
-  led_write(LED_IO, HIGH);
-  while (src_file.available())
+  // start copying
+  char buf[MAX_BUFSIZE + 1] = {};
+  int count = 0, num = src_file.size();
+  lcd.clear();
+  lcd.setCursor(0, 1);
+  lcd.print((char *)F("Copying *=EXIT"));
+  mcp.digitalWrite(LED_IO, HIGH);
+  while (count < num)
   {
-    byte buf = src_file.read();
-    dest_file.write(buf);
+    if (kpd.getKey() == '*')
+      break;
+    int bytes_to_write = MAX_BUFSIZE < num - count ? MAX_BUFSIZE : num - count;
+    src_file.read(buf, bytes_to_write);
+    dest_file.write(buf, bytes_to_write);
+    dest_file.flush(); // clear the dest_file buffer!
+    memset(buf, 0, MAX_BUFSIZE + 1);
+    count += bytes_to_write;
+    lcd.setCursor(0, 0);
+    lcd.print(count);
   }
+  mcp.digitalWrite(LED_IO, LOW);
   src_file.close();
   dest_file.close();
   if (SD.exists(dest_filename))
     print_message((char *)F("File copied"), DEFAULT_DELAY_TIME);
-  led_write(LED_IO, LOW);
 }
 void sd_rm()
 {
@@ -122,9 +172,9 @@ void sd_rm()
     print_message((char *)F("File DNE"), DEFAULT_DELAY_TIME);
   else if (simple_input((char *)F("Confirm remove:")))
   {
-    led_write(LED_IO, HIGH);
+    mcp.digitalWrite(LED_IO, HIGH);
     SD.remove(filename);
-    led_write(LED_IO, LOW);
+    mcp.digitalWrite(LED_IO, LOW);
     if (!SD.exists(filename)) // check
       print_message((char *)F("File removed"), DEFAULT_DELAY_TIME);
     else
@@ -139,9 +189,9 @@ void sd_mkdir()
     print_message((char *)F("Dir exists"), DEFAULT_DELAY_TIME);
   else
   {
-    led_write(LED_IO, HIGH);
+    mcp.digitalWrite(LED_IO, HIGH);
     SD.mkdir(dirname);
-    led_write(LED_IO, LOW);
+    mcp.digitalWrite(LED_IO, LOW);
     if (SD.exists(dirname))
       print_message((char *)F("Dir created"), DEFAULT_DELAY_TIME);
   }
@@ -154,9 +204,9 @@ void sd_rmdir()
     print_message((char *)F("Dir DNE"), DEFAULT_DELAY_TIME);
   else if (simple_input((char *)F("Confirm rmdir:")))
   {
-    led_write(LED_IO, HIGH);
+    mcp.digitalWrite(LED_IO, HIGH);
     SD.rmdir(dirname);
-    led_write(LED_IO, LOW);
+    mcp.digitalWrite(LED_IO, LOW);
     if (!SD.exists(dirname)) // check to be sure
       print_message((char *)F("Dir removed"), DEFAULT_DELAY_TIME);
     else
@@ -181,16 +231,14 @@ void (*sd_ops[])() = {
 void sd_ops_menu()
 {
   if (!SD.begin(SD_CS_PIN))
-  {
     print_message((char *)F("Failed to initialize SD"), DEFAULT_DELAY_TIME);
-    return;
-  }
-  while (-1 != menu(SD_OPS, sd_ops, SD_OPS_LEN, 0, (char *)F("File ops")))
-    0;
+  else
+    while (-1 != menu(SD_OPS, sd_ops, SD_OPS_LEN, 0, (char *)F("File ops")))
+      0;
   SD.end();
 }
 
-// SD file editor
+/* ===== SD file editor ===== */
 void file_editor()
 {
   if (SD.begin(SD_CS_PIN))
@@ -200,22 +248,22 @@ void file_editor()
     // get filename
     buffered_editor(filename, 12, 0, 0, 1, 1, (char *)F("File:"));
     // read file
-    led_write(LED_IO, HIGH);
+    mcp.digitalWrite(LED_IO, HIGH);
     File f = SD.open(filename, FILE_READ);
     f.read(buf, f.size() > MAX_BUFSIZE ? MAX_BUFSIZE : f.size());
     f.close();
-    led_write(LED_IO, LOW);
+    mcp.digitalWrite(LED_IO, LOW);
     // open editor (in-place buffer)
     buffered_editor(buf, MAX_BUFSIZE, 0, 0, 0, 1, NULL);
     // save to file?
     if (simple_input((char *)F("Save file?")))
     {
-      led_write(LED_IO, HIGH);
+      mcp.digitalWrite(LED_IO, HIGH);
       SD.remove(filename); // only way to overwrite a file...
       f = SD.open(filename, FILE_WRITE);
       f.write(buf, strlen(buf));
       f.close();
-      led_write(LED_IO, LOW);
+      mcp.digitalWrite(LED_IO, LOW);
     }
     SD.end();
   }
@@ -223,7 +271,15 @@ void file_editor()
     print_message((char *)F("Failed to initialize SD card"), 1000);
 }
 
-/* System settings menu */
+/* ===== Memory editor (dangerous) ===== */
+void memory_editor()
+{
+  char *addr = (char *)simple_input("ADDR:", 16);
+  int num = simple_input("NUM:");
+  buffered_editor(addr, num, 0, 1, 0, 0, NULL);
+}
+
+/* ===== System settings menu ===== */
 const int MAIN_SETTINGS_LEN = 7;
 const char *MAIN_SETTINGS[] = {
     "Splash on/off",
@@ -293,18 +349,20 @@ void sys_settings()
 
 /*===== program list/pointers =====*/
 // Useful for calling programs from main menu
-const int PROGRAM_LIST_LEN = 4; // CHANGE ME!
 const char *PROGRAM_NAMES[] = {
-    "Test Program",
+    "Test Programs",
     "File Managing",
     "File Editor",
+    "Memory Editor",
     "System Settings",
 };
 void (*program_ptrs[])() = {
-    &test_program,
+    &pgm_tests,
     &sd_ops_menu,
     &file_editor,
+    &memory_editor,
     &sys_settings,
 };
+const int PROGRAM_LIST_LEN = sizeof(program_ptrs) / sizeof(void(*));
 
 #endif //PROGRAMS_HPP

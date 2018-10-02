@@ -1,17 +1,66 @@
 /*
- * Header for system modules
- * 
- * TODO: REALLY messy code, lots of magic#; clean up when possible
+ * System-level programs
  */
 
-#ifndef SYSTEM_HPP
-#define SYSTEM_HPP
+#ifndef SYSUTILS_H
+#define SYSUTILS_H
 
-#include "ComTerminal.h"
+#include "base.h"
 #include "data.h"
+#include "devices.h"
 
-/* generic menu */
-// TODO: port for larger LCDs
+/* ===== UI functions ===== */
+
+// simple input prompt, decimal only
+// returns 0 on normal return, -2 on user exit (buffer may be modified)
+int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
+{
+  bufsize = bufsize > D_COLS ? D_COLS : bufsize; // limit bufsize to one row
+  int count = 0;
+  lcd.blink();
+  while (count < bufsize)
+  {
+    // prompt
+    lcd.clear();
+    lcd.setCursor(0, 0);
+    lcd.print(prompt ? prompt : (char *)F("Input:"));
+    lcd.setCursor(0, 1);
+    lcd.print(buf);
+    char ch = keypad_wait();
+    if (ch == 'A')
+      buf[count++] = '+';
+    else if (ch == 'B')
+      buf[count++] = '-';
+    else if (ch == '*')
+      buf[--count] = 0;
+    else if (ch == '#' || ch == 'D')
+      break;
+    else if (isdigit(ch))
+    {
+      buf[count++] = ch;
+      lcd.print(is_pw ? '*' : ch);
+    }
+  }
+  lcd.noBlink();
+  return 0;
+}
+// interprets user input in the given base and returns result
+int simple_input(const char *prompt, int base)
+{
+  char buf[D_COLS + 1] = {};
+  simple_input(buf, D_COLS, prompt, 0);
+  return strtol(buf, NULL, base);
+}
+// interprets user input in decimal and returns result
+int simple_input(const char *prompt)
+{
+  return simple_input(prompt, 10);
+}
+
+/* generic menu
+    Returns the selected entry, or -1 if user exits menu
+    if given a list of function pointers, call selected functions
+*/
 int menu(const char **items, int num_items, int default_pos, char *prompt)
 {
   // check params
@@ -100,7 +149,54 @@ int menu(const char **items, void (**functions)(), int num_items,
     return -1; // exit code
 }
 
-/* buffered editor: safely view and edit buffers */
+// password handling w/brute force lockout
+// returns 1 for correct password, -1 for incorrect _, -2 for user exit
+int password(const char *true_pass, const char *prompt)
+{
+  if (!true_pass)
+    return -1;
+  if (conf->wrong_admin_pass_count >= MAX_PASS_FAILS)
+  { // locking system
+    print_message((char *)F("System Locked"), 0);
+    while (true)
+      delay(100);
+  }
+  if (conf->wrong_admin_pass_count > 0)
+  {
+    char temp[16] = "";
+    sprintf(temp, (char *)F("PW Retries: %d"),
+            MAX_PASS_FAILS - conf->wrong_admin_pass_count);
+    print_message(temp, DEFAULT_DELAY_TIME);
+  }
+  char pass_buf[MAX_PASS_LEN + 1] = {};
+  int res = simple_input(pass_buf, MAX_PASS_LEN, prompt, true);
+  if (strcmp(pass_buf, true_pass) == 0)
+  {
+    conf->wrong_admin_pass_count = 0;
+    write_config();
+    return 1;
+  }
+  conf->wrong_admin_pass_count++;
+  write_config();
+  return -1;
+}
+
+/* view window: basic character viewer
+    Params
+      bufsize: 0 for strlen(buf)
+      ed_mode: View (0) or Force (1) mode
+    Returns
+      1: success
+      -1: failure
+      -2: user exit
+    Operation
+      Two modes: V(iew) and F(orce). 
+        View mode is for basic WYSIWYG editing
+        Force mode allows for all input behaviors, which enables adding nulls
+          to the buffer, insertions leading to data loss at the end of the 
+          buffer, etc. 
+    
+*/
 int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
                     byte editing, byte in_place, const char *prompt)
 {
@@ -384,6 +480,7 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
         {
           char ascii_buf[3] = {};
           byte ascii_count = 0; // buf for ASCII mode
+          lcd.noBlink();
           lcd.setCursor(D_COLS - 6, D_ROWS - 1);
           lcd.print("0x__");
           while (ascii_count < 2)
@@ -416,6 +513,7 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
 
         else if (IW_INPUT_METHODS[input_method] == 'K') // Keypad Mode
         {
+          lcd.noBlink();
           lcd.setCursor(D_COLS - 5, D_ROWS - 1);
           lcd.print("[ ]");
           char *key_map = (char *)IW_KEYPAD_MAP[ch - '0']; // get keymap
@@ -565,279 +663,5 @@ int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
 
   } // loop
 }
-
-/* dedicated general purpose password prompt */
-int password(const char *true_pass, const char *prompt)
-{
-  if (!true_pass)
-    return -1;
-  if (conf->wrong_admin_pass_count >= MAX_PASS_FAILS)
-  { // locking system
-    print_message((char *)F("System Locked"), 0);
-    while (true)
-      delay(100);
-  }
-  if (conf->wrong_admin_pass_count > 0)
-  {
-    char temp[16] = "";
-    sprintf(temp, (char *)F("PW Retries: %d"),
-            MAX_PASS_FAILS - conf->wrong_admin_pass_count);
-    print_message(temp, DEFAULT_DELAY_TIME);
-  }
-  char pass_buf[MAX_PASS_LEN + 1] = {};
-  int res = simple_input(pass_buf, MAX_PASS_LEN, prompt, true);
-  if (strcmp(pass_buf, true_pass) == 0)
-  {
-    conf->wrong_admin_pass_count = 0;
-    write_config();
-    return 1;
-  }
-  conf->wrong_admin_pass_count++;
-  write_config();
-  return -1;
-}
-
-/* ===== output helpers ===== */
-
-// print lines
-void print_lines(char *const buf, int bufsize, byte force,
-                 int num_rows, int row_size, int start_row)
-{
-  // if not in force mode, cut bufsize to first null
-  if (!force || bufsize == 0)
-    bufsize = strlen(buf);
-  int row_count = 0, num_printed = 0;
-  // print num_lines or until end of buf
-  for (int i = 0; i < bufsize && num_printed < num_rows * row_size; i++)
-  {
-    // handle new line character
-    // TODO: breaks buffered_editor
-    // if (buf[i] == '\n')
-    // {
-    //   if (row_count < num_rows)
-    //     lcd.setCursor(0, start_row + row_count++);
-    //   num_printed += row_size - (i % row_size);
-    //   i++;
-    // }
-    // else
-    num_printed++;
-    // line wrap
-    if (i % row_size == 0 && row_count < num_rows)
-      lcd.setCursor(0, start_row + row_count++);
-    // print character
-    if (buf[i] == 0) // always substitute nulls with spaces
-      lcd.write(' ');
-    else
-      lcd.write(buf[i]);
-  }
-}
-void print_line(char *const buf, byte force, int start_row)
-{
-  print_lines(buf, D_COLS, force, 1, D_COLS, start_row);
-}
-
-// simple message viewer
-void print_message(char *format, int message_delay, ...)
-{
-  char *p_buf = (char *)calloc(strlen(format) + DEFAULT_BUFSIZE, 1);
-  va_list args;
-  va_start(args, format);
-  vsprintf(p_buf, format, args);
-  va_end(args);
-  lcd.clear();
-  print_lines(p_buf, 0, 0, D_ROWS, D_COLS, 0);
-  free(p_buf);
-  delay(message_delay);
-}
-
-// TODO: fancy view
-int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay)
-{
-  // while (d_root + 32 < bufsize) roll_lines();
-}
-
-// print helpers
-void fancy_print(const char *buf)
-{
-  if (!buf)
-    return;
-  if (!conf->fancy)
-  {
-    lcd.print(buf);
-    return;
-  }
-  int len = strlen(buf);
-  for (int i = 0; i < len; i++)
-  {
-    lcd.print(buf[i]);
-    delay(conf->fancy_delay);
-  }
-}
-void fancy_print(const long num)
-{
-  char temp[12] = {}; // max 12 digits
-  sprintf(temp, "%d", num);
-  fancy_print(temp);
-}
-void fancy_print(const double num)
-{
-  char temp[12] = {}; // max 12 digits
-  sprintf(temp, "%f", num);
-  fancy_print(temp);
-}
-void hex_print(const char data)
-{
-  char temp[2];
-  sprintf(temp, "%.2x", (byte)data);
-  lcd.print(temp);
-}
-void hex_print(const char *data, int num)
-{
-  for (int i = 0; i < num; i++)
-  {
-    hex_print(data[i]);
-  }
-}
-
-/* ===== input helpers ===== */
-
-// simple input window, takes an input buffer
-int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
-{
-  bufsize = bufsize > D_COLS ? D_COLS : bufsize; // limit bufsize to one row
-  int count = 0;
-  lcd.blink();
-  while (count < bufsize)
-  {
-    // prompt
-    lcd.clear();
-    lcd.setCursor(0, 0);
-    lcd.print(prompt ? prompt : (char *)F("Input:"));
-    lcd.setCursor(0, 1);
-    lcd.print(buf);
-    char ch = keypad_wait();
-    if (ch == 'A')
-      buf[count++] = '+';
-    else if (ch == 'B')
-      buf[count++] = '-';
-    else if (ch == '*')
-      buf[--count] = 0;
-    else if (ch == '#' || ch == 'D')
-      break;
-    else if (isdigit(ch))
-    {
-      buf[count++] = ch;
-      lcd.print(is_pw ? '*' : ch);
-    }
-  }
-  lcd.noBlink();
-  return 0;
-}
-int simple_input(const char *prompt)
-{
-  char buf[D_COLS + 1] = {};
-  simple_input(buf, D_COLS, prompt, 0);
-  return strtol(buf, NULL, 10);
-}
-
-// wait for keypad input
-char keypad_wait()
-{
-  if (led_enable)
-    digitalWrite(LED_WAIT, HIGH); // indicate waiting for input
-  while (true)
-  {
-    if (serial)
-    { // Note: serial input takes precedence if enabled
-      unsigned char ch_s = Serial.read();
-      if (ch_s != 255)
-      {
-        digitalWrite(LED_WAIT, LOW);
-        return ch_s;
-      }
-    }
-    unsigned char ch_k = kpd.getKey();
-    if (ch_k != 0)
-    {
-      digitalWrite(LED_WAIT, LOW);
-      return ch_k;
-    }
-    delay(10);
-  }
-}
-
-/* ===== System functions ===== */
-
-void led_write(uint8 pin, uint8 value)
-{
-  //if (pin != LED_STATUS)
-  digitalWrite(pin, value);
-  // TODO
-}
-
-void handle_exi()
-{
-  // TODO
-  //reset_system();
-}
-
-void reset_system()
-{
-  print_message((char *)F("Reseting system"), 0);
-  nvic_sys_reset();
-}
-
-// config reading/writing
-void read_config()
-{
-  free(conf); // lest memory leak
-  conf = (CT_Config *)malloc(CONFIG_LEN);
-  ee_read(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
-}
-void write_config()
-{
-  ee_write(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
-}
-
-/*===== Emulated EEPROM handling ===== */
-// Note: possible 1-byte overflow; make sure num is even
-// Note: ptr is unprotected; know what you're doing
-void ee_write(uint16_t address, byte *ptr, int num)
-{
-  uint16_t buf; // 2-byte buffer for writing
-  while (num > 0)
-  {
-    buf = *(uint16_t *)ptr;
-    EEPROM.write(address, buf);
-    address++;
-    ptr += 2;
-    num -= 2;
-  }
-}
-// Note: possible 1-byte overflow; make sure num is even
-// Note: ptr is unprotected; know what you're doing
-byte *ee_read(uint16_t address, byte *ptr, int num)
-{
-  uint16_t buf; // 2-byte buffer for reading
-  byte *orig_ptr = ptr;
-  while (num > 0)
-  {
-    EEPROM.read(address, &buf);
-    *(uint16_t *)ptr = buf;
-    address++;
-    ptr += 2;
-    num -= 2;
-  }
-  return orig_ptr; // for convenience
-}
-
-/* ===== LCD_Driver class ===== */
-// Note: should handle cursor movement, screen scrolling and printing
-class LCD_Driver
-{
-public:
-  int d_root, d_pos[2], d_offset;
-  LCD_Driver();
-};
 
 #endif

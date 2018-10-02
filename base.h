@@ -1,12 +1,12 @@
-/*
-   Header for the DSKY project
-   Definitions and configs
-
-   TODO: document all implemented functions/helpers
+/* 
+ * Header for the DSKY project
+ * Definitions and configs
+ * 
+ * TODO: document all implemented functions/helpers
 */
 
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef BASE_H
+#define BASE_H
 
 // C standard libs
 #include <stdlib.h>
@@ -21,12 +21,6 @@
 #include <RTClock.h>
 #include <Wire.h>
 #include <SPI.h>
-
-// base hardware libs
-#include <LiquidCrystal.h>
-#include <Key.h>
-#include <Keypad.h>
-#include <SD.h>
 
 const char TEST_STR[] PROGMEM = "M.A.S. Testing  %s";
 
@@ -63,9 +57,9 @@ const int CONFIG_LEN = sizeof(CT_Config);
 
 /* ===== LED configs ===== */
 #define LED_STATUS PC13
-#define LED_WAIT PC14
-#define LED_IO PC15  //TODO
-#define LED_INT PC13 //TODO
+#define LED_WAIT 7
+#define LED_IO 6
+#define LED_INT 5
 
 /* ===== display configs ===== */
 #define D_COLS 16
@@ -89,14 +83,6 @@ byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB12, PB13, PB14, PB15};
 
 const int DEFAULT_DELAY_TIME = 1000;
 
-/*===== global vars =====*/
-//RTClock rtc(RTCSEL_LSE);
-LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7); // see docs
-Keypad kpd = Keypad(makeKeymap(KEYPAD_KEYS), KEYPAD_ROW_PINS, KEYPAD_COL_PINS,
-                    KEYPAD_ROWS, KEYPAD_COLS);
-CT_Config *conf = NULL;            // pointer to config struct
-unsigned long work_started_millis; // record start time for last task
-
 /* ===== sysutils configs ===== */
 
 // menu function configs
@@ -108,8 +94,8 @@ unsigned long work_started_millis; // record start time for last task
 #define M_ENTER_KEY '#'
 
 // Editor configs
-#define DEFAULT_BUFSIZE 63
-#define MAX_BUFSIZE 1023
+#define DEFAULT_BUFSIZE 64
+#define MAX_BUFSIZE 1024
 /* modes
     0: 'View' (normal) mode, view null-terminated strings
     1: 'Force' mode, view entire memory region given by bufsize
@@ -171,91 +157,4 @@ const char IW_KEYPAD_MAP[10][6] = { // null-terminate for wrapping
     {'8', 't', 'u', 'v'},
     {'9', 'w', 'x', 'y', 'z'}};
 
-/*===== sysutil functions =====*/
-
-/* generic menu
-    Returns the selected entry, or -1 if user exits menu
-    if given a list of function pointers, call selected functions
-*/
-int menu(const char **items, int num_items, int default_pos, char *prompt);
-int menu(const char **items, const void (**programs)(), int num_items,
-         int default_pos, char *prompt);
-
-/* view window: basic character viewer
-    Params
-      bufsize: 0 for strlen(buf)
-      ed_mode: View (0) or Force (1) mode
-    Returns
-      1: success
-      -1: failure
-      -2: user exit
-    Operation
-      Two modes: V(iew) and F(orce). 
-        View mode is for basic WYSIWYG editing
-        Force mode allows for all input behaviors, which enables adding nulls
-          to the buffer, insertions leading to data loss at the end of the 
-          buffer, etc. 
-    
-*/
-int buffered_editor(char *in_buf, int bufsize, byte read_only, byte ed_mode,
-                    byte editing, byte in_place, const char *prompt);
-
-// password handling w/brute force lockout
-// returns 1 for correct password, -1 for incorrect _, -2 for user exit
-int password(const char *true_pass);
-
-/* ===== output helpers ===== */
-
-// print lines to LCD from buffer
-void print_lines(char *const buf, int bufsize, uint8_t force,
-                 int num_lines, int row_size, int start_row);
-void print_line(char *const buf, byte force, int start_row);
-
-// printf-like simple message display
-void print_message(char *buf, int message_delay, ...);
-
-// view char buffers fancily (full screen, no force)
-int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay);
-
-// basic print functions
-void fancy_print(const char *buf);
-void fancy_print(const int num);
-void hex_print(const char data);
-void hex_print(const char *data, int num);
-
-/* ===== input helpers ===== */
-
-// simple input prompt, decimal only
-// returns 0 on normal return, -2 on user exit (buffer may be modified)
-int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw);
-// returns int from user; useful for binary or short numeric inputs
-int simple_input(const char *prompt);
-
-// wait for keypad input
-// NOTE: this hangs the main program loop
-char keypad_wait();
-
-/* ===== System functions ===== */
-
-// LED writing using I2C port expanders
-// Note: PC13 should be redirected to digitalWrite()
-void led_write(uint8 pin, uint8 value);
-
-// external interrupt handler
-void handle_exi();
-
-// system reset
-void reset_system();
-
-// config reading/writing
-void read_config();
-void write_config();
-
-/* ===== Emulated EEPROM handling ===== 
-the EEPROM library manages a virtual address space starting on 0x0 */
-// Note: possible 1-byte overflow; make sure num is even
-// Note: ptr is unprotected; know what you're doing
-void ee_write(uint16_t address, byte *ptr, int num);
-byte *ee_read(uint16_t address, byte *ptr, int num);
-
-#endif //CONFIG_H
+#endif //BASE_H
