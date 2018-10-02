@@ -19,6 +19,7 @@
 #include <Adafruit_MCP23008.h>
 
 /*===== global vars =====*/
+// Note: device instances must NOT reference each other during init!
 Adafruit_MCP23008 mcp = Adafruit_MCP23008(); // first MCP expander
 //RTClock rtc; //= RTClock(RTCSEL_LSE);
 LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
@@ -64,26 +65,6 @@ void print_line(char *const buf, byte force, int start_row)
   print_lines(buf, D_COLS, force, 1, D_COLS, start_row);
 }
 
-// simple message viewer
-void print_message(char *format, int message_delay, ...)
-{
-  char *p_buf = (char *)calloc(strlen(format) + DEFAULT_BUFSIZE, 1);
-  va_list args;
-  va_start(args, format);
-  vsprintf(p_buf, format, args);
-  va_end(args);
-  lcd.clear();
-  print_lines(p_buf, 0, 0, D_ROWS, D_COLS, 0);
-  free(p_buf);
-  delay(message_delay);
-}
-
-// TODO: fancy view
-int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay)
-{
-  // while (d_root + 32 < bufsize) roll_lines();
-}
-
 // print helpers
 void fancy_print(const char *buf)
 {
@@ -127,7 +108,7 @@ void hex_print(const char *data, int num)
   }
 }
 
-/* ===== input helpers ===== */
+/* ===== keypad helpers ===== */
 // NOTE: watch for serial bus conflicts!
 char keypad_wait()
 {
@@ -163,7 +144,8 @@ void handle_exi()
 
 void reset_system()
 {
-  print_message((char *)F("Reseting system"), 0);
+  lcd.clear();
+  lcd.print((char *)F("Reseting system"));
   nvic_sys_reset();
 }
 
@@ -197,24 +179,9 @@ byte *ee_read(uint16_t address, byte *ptr, int num)
   return orig_ptr; // for convenience
 }
 
-// config reading/writing
-void read_config()
-{
-  free(conf); // lest memory leak
-  conf = (CT_Config *)malloc(CONFIG_LEN);
-  ee_read(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
-}
-void write_config()
-{
-  ee_write(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
-}
-
 /* ===== MPU6050 driver ===== 
 Source (partial): https://www.stm32duino.com/viewtopic.php?f=9&t=4048&p=48546&hilit=mpu6050#p48546 */
 #define MPU_ADDRESS 0b1101000
-#define MPU_CLOCK 400000
-#define MPU_TIMEOUT 1000000 // in microseconds
-#define MPU_TIMEOUT_TIMER 2
 typedef struct MPU_readout
 {
   double x_accel;
@@ -227,8 +194,6 @@ typedef struct MPU_readout
 } MPU_readout;
 void setupMPU()
 {
-  lcd.clear();
-  lcd.print("MPU init...");
   mcp.digitalWrite(LED_IO, HIGH);
   // delay(50); // ???
   Wire.beginTransmission(0x68);
@@ -249,7 +214,6 @@ void setupMPU()
   Wire.write(0b00000000);              //Setting the accel to +/- 2g
   Wire.endTransmission();
   mcp.digitalWrite(LED_IO, LOW);
-  print_message("MPU initialized", 500);
 }
 MPU_readout MPU_request()
 {

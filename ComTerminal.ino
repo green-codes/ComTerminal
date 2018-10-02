@@ -25,15 +25,17 @@ void setup() // Note: keeping setup explicit
 
   // setup the I2C interface
   Wire.begin();
-
   // setup MCP23008(s)
   print_message("Init MCP...", 0);
   mcp.begin(0); // address 0x20 + 0b000
   print_message("MCP initialized", 500);
-
   // init MPU6050
   if (MPU_enabled)
+  {
+    print_message("MPU init...", 0);
     setupMPU();
+    print_message("MPU initialized", 500);
+  }
 
   // setup LED pins
   pinMode(LED_STATUS, OUTPUT);
@@ -63,9 +65,7 @@ void setup() // Note: keeping setup explicit
 
   // Print welcome message and request password
   if (conf->splash)
-  {
     print_message((char *)TEST_STR, 2000, conf->device_name);
-  }
 
   // handle bootup password
   while (conf->req_pass)
@@ -77,10 +77,14 @@ void setup() // Note: keeping setup explicit
     else if (res == -1)
       print_message("PASSWD INCORRECT", 1000);
     else if (res == -2)
-      print_message("PASSWORD REQ'D\nFOR LOGIN", 1000);
+      print_message("PASSWORD REQ'D", 1000);
   }
 
+  // startup program
+  //pgm_tests();
+
   // DEBUG stuff
+  //Serial.println("Hello!");
 }
 
 /*===== Main Loop =====*/

@@ -11,6 +11,38 @@
 
 /* ===== UI functions ===== */
 
+// reading from / saving to persistent configs in flash
+void read_config()
+{
+  free(conf); // lest memory leak
+  conf = (CT_Config *)malloc(CONFIG_LEN);
+  ee_read(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
+}
+void write_config()
+{
+  ee_write(CONFIG_ADDRESS, (byte *)conf, CONFIG_LEN);
+}
+
+// simple message viewer
+void print_message(char *format, int message_delay, ...)
+{
+  char *p_buf = (char *)calloc(strlen(format) + DEFAULT_BUFSIZE, 1);
+  va_list args;
+  va_start(args, format);
+  vsprintf(p_buf, format, args);
+  va_end(args);
+  lcd.clear();
+  print_lines(p_buf, 0, 0, D_ROWS, D_COLS, 0);
+  free(p_buf);
+  delay(message_delay);
+}
+
+// TODO: fancy view
+int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay)
+{
+  // while (d_root + 32 < bufsize) roll_lines();
+}
+
 // simple input prompt, decimal only
 // returns 0 on normal return, -2 on user exit (buffer may be modified)
 int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
