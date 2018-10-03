@@ -1,7 +1,7 @@
 /*
-   Main file for the DSKY project; using serial input for now in place
-   of the matrix keypad.
-
+ * Main file for the DSKY project; using serial input for now in place
+ * of the matrix keypad.
+ * 
 */
 
 #include "base.h"

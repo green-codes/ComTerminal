@@ -2,7 +2,6 @@
  * Header for the DSKY project
  * Definitions and configs
  * 
- * TODO: document all implemented functions/helpers
 */
 
 #ifndef BASE_H

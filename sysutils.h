@@ -1,5 +1,7 @@
 /*
  * System-level programs
+ * 
+ * TODO: a Cursor class and a Display class would help cleaning up the code
  */
 
 #ifndef SYSUTILS_H
@@ -9,7 +11,7 @@
 #include "data.h"
 #include "devices.h"
 
-/* ===== UI functions ===== */
+/* ===== system utilities ===== */
 
 // reading from / saving to persistent configs in flash
 void read_config()

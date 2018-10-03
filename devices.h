@@ -1,8 +1,7 @@
 /*
- * Header for system modules
- * Note: add device libraries here
+ * higher level driver modules
+ * Note: add device-specific libraries here
  * 
- * TODO: REALLY messy code, lots of magic#; clean up when possible
  */
 
 #ifndef DEVICES_H

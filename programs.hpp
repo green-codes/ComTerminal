@@ -1,8 +1,7 @@
 /*
-  Header for functions/applications
-
-  Note: functions below should take no args and return void. 
-  Note: Remember to change program names and pointers at the end! 
+ * Header for functions/applications
+ * 
+ * Note: functions below should take no args and return void. 
 */
 
 #ifndef PROGRAMS_HPP
