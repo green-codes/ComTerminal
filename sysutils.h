@@ -45,7 +45,7 @@ int fancy_view(char *buf, int bufsize, int roll_delay, int end_delay)
   // while (d_root + 32 < bufsize) roll_lines();
 }
 
-// simple input prompt, decimal only
+// simple input prompt, decimal only, editing buffer in-place
 // returns 0 on normal return, -2 on user exit (buffer may be modified)
 int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
 {
@@ -65,6 +65,8 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
       buf[count++] = '+';
     else if (ch == 'B')
       buf[count++] = '-';
+    else if (ch == 'C')
+      buf[count++] = '.';
     else if (ch == '*')
       buf[--count] = 0;
     else if (ch == '#' || ch == 'D')
@@ -79,11 +81,15 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
   return 0;
 }
 // interprets user input in the given base and returns result
+// base: if > 0, interpret as int in base; else interpret as float
 int simple_input(const char *prompt, int base)
 {
   char buf[D_COLS + 1] = {};
   simple_input(buf, D_COLS, prompt, 0);
-  return strtol(buf, NULL, base);
+  if (base > 0)
+    return strtol(buf, NULL, base);
+  else
+    return strtof(buf, NULL);
 }
 // interprets user input in decimal and returns result
 int simple_input(const char *prompt)

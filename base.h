@@ -14,6 +14,7 @@
 #include <string.h>
 
 // STM32Duino libs
+#include <Arduino.h>
 #include <libmaple/nvic.h> // stm32f1 reset
 #include <EEPROM.h>
 #include <HardwareTimer.h>
