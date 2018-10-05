@@ -13,6 +13,27 @@
 
 /* ===== system utilities ===== */
 
+// monitor LCD output of func
+void monitor(void (*func)())
+{
+  uint32_t last_millis = millis();
+  while (true)
+  {
+    if (millis() - last_millis > MONI_WAIT)
+    {
+      last_millis = millis();
+      func();
+    }
+    char ch = kpd.getKey();
+    if (ch == MONI_EXIT_KEY)
+    {
+      if (conf->tone_en)
+        tone(TONE_PIN, TONE_KEY_FREQ, TONE_KEY_DELAY);
+      break;
+    }
+  }
+}
+
 // reading from / saving to persistent configs in flash
 void read_config()
 {
@@ -81,7 +102,7 @@ int simple_input(char *buf, int bufsize, const char *prompt, bool is_pw)
   return 0;
 }
 // interprets user input in the given base and returns result
-// base: if > 0, interpret as int in base; else interpret as float
+// Note: if base > 0, interpret as int in base; else interpret as float
 int simple_input(const char *prompt, int base)
 {
   char buf[D_COLS + 1] = {};

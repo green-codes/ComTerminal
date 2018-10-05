@@ -17,8 +17,7 @@ void test_MPU()
 {
   if (!MPU_enabled)
     return;
-  MPU_readout res = MPU_request();
-  print_message((char *)F("MPU: %f"), DEFAULT_DELAY_TIME, res.temp);
+  monitor(MPU_display);
 }
 void test_SD()
 {

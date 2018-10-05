@@ -39,6 +39,7 @@ bool MPU_enabled = 1;
 typedef struct CT_Config
 {
     // system configs
+    bool tone_en = 1;
     bool splash = 0;
     bool fancy = 0;
     int fancy_delay = 20;                       // in milliseconds
@@ -52,16 +53,17 @@ typedef struct CT_Config
 const uint16_t CONFIG_ADDRESS = 0x0;
 const int CONFIG_LEN = sizeof(CT_Config);
 
-/* ===== SD Card config ===== */
-#define SD_CS_PIN PA4
-
-/* ===== LED configs ===== */
+/* ===== Misc pin configs ===== */
 #define LED_STATUS PC13
 #define LED_WAIT 7
 #define LED_IO 6
 #define LED_INT 5
+#define SD_CS_PIN PA4
+#define TONE_PIN PB9
+#define LCD_PWR_PIN 0
 
 /* ===== display configs ===== */
+#define DEFAULT_DELAY_TIME 1000
 #define D_COLS 16
 #define D_ROWS 4
 #define LCD_RS PA2
@@ -70,6 +72,15 @@ const int CONFIG_LEN = sizeof(CT_Config);
 #define LCD_D5 PB10
 #define LCD_D6 PB1
 #define LCD_D7 PB0
+
+/* ===== monitor program configs ===== */
+#define MONI_WAIT 200
+#define MONI_EXIT_KEY '*'
+
+/* ===== Tone configs ===== */
+#define TONE_KEY_FREQ 440
+#define TONE_KEY_DELAY 20
+#define TONE_CONFIRM_FREQ 880
 
 /* ===== keypad configs ===== */
 const byte KEYPAD_ROWS = 4, KEYPAD_COLS = 4;
@@ -80,8 +91,6 @@ const char KEYPAD_KEYS[KEYPAD_ROWS][KEYPAD_COLS] = { // Define the Keymap
     {'*', '0', '#', 'D'}};
 byte KEYPAD_ROW_PINS[KEYPAD_ROWS] = {PA15, PB3, PB4, PB5};
 byte KEYPAD_COL_PINS[KEYPAD_COLS] = {PB12, PB13, PB14, PB15};
-
-const int DEFAULT_DELAY_TIME = 1000;
 
 /* ===== sysutils configs ===== */
 

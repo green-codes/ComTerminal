@@ -128,6 +128,8 @@ char keypad_wait()
     if (ch_k != 0)
     {
       mcp.digitalWrite(LED_WAIT, LOW);
+      if (conf->tone_en)
+        tone(TONE_PIN, TONE_KEY_FREQ, TONE_KEY_DELAY);
       return ch_k;
     }
     delay(10);
@@ -240,6 +242,28 @@ MPU_readout MPU_request()
   res.z_accel = accelZ / 16384.0;
   mcp.digitalWrite(LED_IO, LOW);
   return res;
+}
+void MPU_display() // for 4-line displays
+{
+  MPU_readout res = MPU_request();
+  lcd.clear();
+  lcd.print((char *)F("MPU6050 T:"));
+  lcd.print(res.temp);
+  lcd.setCursor(0, 1);
+  lcd.print((char *)F("aX"));
+  lcd.print(res.x_accel);
+  lcd.print((char *)F(" gX"));
+  lcd.print(res.x_gyro);
+  lcd.setCursor(0, 2);
+  lcd.print((char *)F("aY"));
+  lcd.print(res.y_accel);
+  lcd.print((char *)F(" gY"));
+  lcd.print(res.y_gyro);
+  lcd.setCursor(0, 3);
+  lcd.print((char *)F("aZ"));
+  lcd.print(res.z_accel);
+  lcd.print((char *)F(" gZ"));
+  lcd.print(res.z_gyro);
 }
 
 #endif

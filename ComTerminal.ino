@@ -28,6 +28,8 @@ void setup() // Note: keeping setup explicit
   // setup MCP23008(s)
   print_message("Init MCP...", 0);
   mcp.begin(0); // address 0x20 + 0b000
+  mcp.pinMode(LCD_PWR_PIN, OUTPUT);
+  mcp.digitalWrite(LCD_PWR_PIN, HIGH);
   print_message("MCP initialized", 500);
   // init MPU6050
   if (MPU_enabled)
@@ -62,6 +64,9 @@ void setup() // Note: keeping setup explicit
     print_message("Read conf...", 500);
     read_config();
   }
+
+  if (conf->tone_en)
+    tone(TONE_PIN, TONE_CONFIRM_FREQ, 500);
 
   // Print welcome message and request password
   if (conf->splash)
