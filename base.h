@@ -7,6 +7,8 @@
 #ifndef BASE_H
 #define BASE_H
 
+#include "data.h"
+
 // C standard libs
 #include <stdlib.h>
 #include <stdarg.h> // variable arguments
@@ -25,12 +27,12 @@
 const char TEST_STR[] PROGMEM = "M.A.S. Testing  %s";
 
 /*===== global configs =====*/
-bool led_enable = 1;
-bool serial = 1;
-bool debug = 1;
-bool reset_EEPROM = 1;
-bool reset_conf = 1;
-bool MPU_enabled = 1;
+#define LED_ENABLE 1
+#define SERIAL_ENABLE 0
+#define RESET_EEPROM 1
+#define RESET_CONF 1
+#define MPU_ENABLE 1
+#define GPS_ENABLE 1
 
 /* ===== programmable configs ===== */
 #define MAX_PASS_LEN 16
@@ -53,6 +55,10 @@ typedef struct CT_Config
 const uint16_t CONFIG_ADDRESS = 0x0;
 const int CONFIG_LEN = sizeof(CT_Config);
 
+/* ===== System timer ===== */
+#define SYS_INT_DELAY 1000 // in microseconds
+#define SysTimer Timer3
+
 /* ===== Misc pin configs ===== */
 #define LED_STATUS PC13
 #define LED_WAIT 7
@@ -74,12 +80,12 @@ const int CONFIG_LEN = sizeof(CT_Config);
 #define LCD_D7 PB0
 
 /* ===== monitor program configs ===== */
-#define MONI_WAIT 200
-#define MONI_EXIT_KEY '*'
+#define MONI_DELAY 5
+#define MONI_EXIT_KEY 'D'
 
 /* ===== Tone configs ===== */
 #define TONE_KEY_FREQ 440
-#define TONE_KEY_DELAY 20
+#define TONE_KEY_DELAY 10
 #define TONE_CONFIRM_FREQ 880
 
 /* ===== keypad configs ===== */

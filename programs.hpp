@@ -10,14 +10,19 @@
 #include "base.h"
 #include "devices.h"
 #include "sysutils.h"
-#include "data.h"
 
 /*===== testing programs =====*/
-void test_MPU()
+void GPS_monitor()
 {
-  if (!MPU_enabled)
+  if (!GPS_ENABLE)
     return;
-  monitor(MPU_display);
+  monitor(GPS_display, 1000);
+}
+void MPU_monitor()
+{
+  if (!MPU_ENABLE)
+    return;
+  monitor(MPU_display, 250);
 }
 void test_SD()
 {
@@ -42,12 +47,14 @@ void jmp_stub()
   print_message("Addr:0x%.8x", DEFAULT_DELAY_TIME, &jmp_stub);
 }
 const char *TEST_PGMS[] = {
-    "MPU test",
+    "GPS monitor",
+    "MPU Monitor",
     "SD write test",
     "JMP STUB",
 };
 void (*test_pgms[])() = {
-    &test_MPU,
+    &GPS_monitor,
+    &MPU_monitor,
     &test_SD,
     &jmp_stub};
 const int TEST_PGMS_LEN = sizeof(test_pgms) / sizeof(void(*));
@@ -278,8 +285,8 @@ void memory_editor()
 }
 
 /* ===== System settings menu ===== */
-const int MAIN_SETTINGS_LEN = 7;
 const char *MAIN_SETTINGS[] = {
+    "Tone enable",
     "Splash on/off",
     "Fancy on/off",
     "Fancy delay",
@@ -288,10 +295,16 @@ const char *MAIN_SETTINGS[] = {
     "Device name",
     "Reset device",
 };
+const int MAIN_SETTINGS_LEN = sizeof(MAIN_SETTINGS) / sizeof(char *);
 void sys_settings()
 {
   int s = menu(MAIN_SETTINGS, MAIN_SETTINGS_LEN, 0, (char *)F("Sys Stgs"));
-  if (MAIN_SETTINGS[s] == (char *)F("Splash on/off"))
+  if (MAIN_SETTINGS[s] == (char *)F("Tone enable"))
+  {
+    conf->tone_en = conf->tone_en ? 0 : 1;
+    print_message((char *)F("Tone EN: %d"), DEFAULT_DELAY_TIME, conf->tone_en);
+  }
+  else if (MAIN_SETTINGS[s] == (char *)F("Splash on/off"))
   {
     conf->splash = conf->splash ? 0 : 1;
     print_message((char *)F("Splash: %d"), DEFAULT_DELAY_TIME, conf->splash);

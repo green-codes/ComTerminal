@@ -5,7 +5,6 @@
 */
 
 #include "base.h"
-#include "data.h"
 #include "devices.h"
 #include "sysutils.h"
 #include "programs.hpp"
@@ -13,15 +12,30 @@
 /* ===== Init ===== */
 void setup() // Note: keeping setup explicit
 {
-  // set up display/serial
+  // set up display
   lcd.begin(D_COLS, D_ROWS);
   lcd.clear();
-  if (serial)
+
+  // setup GPS or USB Serial
+  if (GPS_ENABLE)
+  {
+    gps.begin(9600);
+    gps.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);
+    //gps.sendCommand(PMTK_SET_NMEA_OUTPUT_ALLDATA);
+    gps.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);
+  }
+  else if (SERIAL_ENABLE)
     Serial.begin(9600);
 
-  // setup external I/O interrupt
+  // setup external interrupt
   pinMode(PA0, INPUT_PULLUP);
   attachInterrupt(PA0, handle_exi, FALLING);
+
+  // setup scheduled interrupts for system updates
+  SysTimer.setChannel1Mode(TIMER_OUTPUTCOMPARE);
+  SysTimer.setPeriod(SYS_INT_DELAY);
+  SysTimer.setCompare1(1); // only the period matters
+  SysTimer.attachCompare1Interrupt(handle_tmi);
 
   // setup the I2C interface
   Wire.begin();
@@ -31,8 +45,8 @@ void setup() // Note: keeping setup explicit
   mcp.pinMode(LCD_PWR_PIN, OUTPUT);
   mcp.digitalWrite(LCD_PWR_PIN, HIGH);
   print_message("MCP initialized", 500);
-  // init MPU6050
-  if (MPU_enabled)
+  // setup MPU6050
+  if (MPU_ENABLE)
   {
     print_message("MPU init...", 0);
     setupMPU();
@@ -48,12 +62,12 @@ void setup() // Note: keeping setup explicit
   mcp.digitalWrite(LED_IO, LOW);
 
   // EEPROM and conf options
-  if (reset_EEPROM)
+  if (RESET_EEPROM)
   {
     print_message("Reset EEPROM...", 500);
     EEPROM.format();
   }
-  if (reset_conf)
+  if (RESET_CONF)
   {
     print_message("Reset conf...", 500);
     conf = new CT_Config();
@@ -86,7 +100,7 @@ void setup() // Note: keeping setup explicit
   }
 
   // startup program
-  //pgm_tests();
+  pgm_tests();
 
   // DEBUG stuff
   //Serial.println("Hello!");

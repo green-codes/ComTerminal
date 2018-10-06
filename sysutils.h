@@ -2,24 +2,27 @@
  * System-level programs
  * 
  * TODO: a Cursor class and a Display class would help cleaning up the code
+ * TODO: implement manual TWI send/read programs
  */
 
 #ifndef SYSUTILS_H
 #define SYSUTILS_H
 
 #include "base.h"
-#include "data.h"
 #include "devices.h"
 
 /* ===== system utilities ===== */
 
 // monitor LCD output of func
-void monitor(void (*func)())
+void monitor(void (*func)(), int update_delay)
 {
+  func();
   uint32_t last_millis = millis();
   while (true)
   {
-    if (millis() - last_millis > MONI_WAIT)
+    if (last_millis > millis()) // catch
+      last_millis = millis();
+    if (millis() - last_millis > update_delay)
     {
       last_millis = millis();
       func();
@@ -31,6 +34,7 @@ void monitor(void (*func)())
         tone(TONE_PIN, TONE_KEY_FREQ, TONE_KEY_DELAY);
       break;
     }
+    delay(MONI_DELAY); // save power; 5ms=200Hz
   }
 }
 

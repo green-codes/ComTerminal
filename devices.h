@@ -8,7 +8,6 @@
 #define DEVICES_H
 
 #include "base.h"
-#include "data.h"
 
 // hardware libs
 #include <LiquidCrystal.h> // parallel
@@ -16,11 +15,13 @@
 #include <Keypad.h> // parallel
 #include <SD.h>     // hardcoded to use SPI1
 #include <Adafruit_MCP23008.h>
+#include <Adafruit_GPS.h>
 
 /*===== global vars =====*/
 // Note: device instances must NOT reference each other during init!
 Adafruit_MCP23008 mcp = Adafruit_MCP23008(); // first MCP expander
-//RTClock rtc; //= RTClock(RTCSEL_LSE);
+Adafruit_GPS gps(&Serial1);
+//RTClock rtc = RTClock(RTCSEL_LSE); // the GPS module has a reliable RTC.
 LiquidCrystal lcd(LCD_RS, LCD_EN, LCD_D4, LCD_D5, LCD_D6, LCD_D7);
 Keypad kpd = Keypad(makeKeymap(KEYPAD_KEYS), KEYPAD_ROW_PINS,
                     KEYPAD_COL_PINS, KEYPAD_ROWS, KEYPAD_COLS);
@@ -62,6 +63,17 @@ void print_lines(char *const buf, int bufsize, byte force,
 void print_line(char *const buf, byte force, int start_row)
 {
   print_lines(buf, D_COLS, force, 1, D_COLS, start_row);
+}
+// lcd printf
+void printf_lcd(char *format, ...)
+{
+  char *p_buf = (char *)calloc(D_COLS + 2, 1);
+  va_list args;
+  va_start(args, format);
+  vsnprintf(p_buf, D_COLS + 1, format, args);
+  va_end(args);
+  lcd.print(p_buf);
+  free(p_buf);
 }
 
 // print helpers
@@ -111,11 +123,11 @@ void hex_print(const char *data, int num)
 // NOTE: watch for serial bus conflicts!
 char keypad_wait()
 {
-  if (led_enable)
+  if (LED_ENABLE)
     mcp.digitalWrite(LED_WAIT, HIGH); // indicate waiting for input
   while (true)
   {
-    if (serial)
+    if (SERIAL_ENABLE)
     { // Note: serial input takes precedence if enabled
       unsigned char ch_s = Serial.read();
       if (ch_s != 255)
@@ -134,20 +146,6 @@ char keypad_wait()
     }
     delay(10);
   }
-}
-
-/* ===== System functions ===== */
-void handle_exi()
-{
-  // TODO
-  //reset_system();
-}
-
-void reset_system()
-{
-  lcd.clear();
-  lcd.print((char *)F("Reseting system"));
-  nvic_sys_reset();
 }
 
 /*===== Emulated EEPROM handling ===== */
@@ -178,6 +176,20 @@ byte *ee_read(uint16_t address, byte *ptr, int num)
     num -= 2;
   }
   return orig_ptr; // for convenience
+}
+
+/* ===== SD card functions ===== */
+int sd_log(char *buf, char *filename)
+{
+  if (!buf || !filename || !SD.begin(SD_CS_PIN))
+    return -1;
+  mcp.digitalWrite(LED_IO, HIGH);
+  File f = SD.open(filename, FILE_WRITE);
+  f.write(buf);
+  f.close();
+  SD.end();
+  mcp.digitalWrite(LED_IO, LOW);
+  return 0;
 }
 
 /* ===== MPU6050 driver ===== 
@@ -247,23 +259,55 @@ void MPU_display() // for 4-line displays
 {
   MPU_readout res = MPU_request();
   lcd.clear();
-  lcd.print((char *)F("MPU6050 T:"));
-  lcd.print(res.temp);
+  printf_lcd((char *)F("MPU6050 T:%5.1f"), res.temp);
   lcd.setCursor(0, 1);
-  lcd.print((char *)F("aX"));
-  lcd.print(res.x_accel);
-  lcd.print((char *)F(" gX"));
-  lcd.print(res.x_gyro);
+  printf_lcd((char *)F("aX:%4.2f gX:%5.3f"), res.x_accel, res.x_gyro);
   lcd.setCursor(0, 2);
-  lcd.print((char *)F("aY"));
-  lcd.print(res.y_accel);
-  lcd.print((char *)F(" gY"));
-  lcd.print(res.y_gyro);
+  printf_lcd((char *)F("aY:%4.2f gY:%5.3f"), res.y_accel, res.y_gyro);
   lcd.setCursor(0, 3);
-  lcd.print((char *)F("aZ"));
-  lcd.print(res.z_accel);
-  lcd.print((char *)F(" gZ"));
-  lcd.print(res.z_gyro);
+  printf_lcd((char *)F("aZ:%4.2f gZ:%5.3f"), res.z_accel, res.z_gyro);
+}
+
+/* ===== GPS functions ===== */
+// get processed GPS data
+void GPS_display()
+{
+  lcd.clear();
+  // print regardless if there's new data
+  printf_lcd((char *)F("GPS:%d %.2d:%.2d:%.2d"), gps.satellites,
+             gps.hour, gps.minute, gps.seconds);
+  lcd.setCursor(0, 1);
+  printf_lcd((char *)F("lat:%f"), gps.latitude_fixed / 10000000.0);
+  lcd.setCursor(0, 2);
+  printf_lcd((char *)F("lon:%f"), gps.longitude_fixed / 10000000.0);
+  lcd.setCursor(0, 3);
+  printf_lcd((char *)F("alt: %f"), gps.altitude);
+}
+void GPS_update()
+{
+  gps.read();
+  if (gps.newNMEAreceived())
+    gps.parse(gps.lastNMEA());
+}
+
+/* ===== System functions ===== */
+void handle_exi() // handle external interrupt
+{
+  tone(TONE_PIN, TONE_CONFIRM_FREQ, 1000);
+  // TODO
+}
+void handle_tmi() // handle scheduled interrupt
+{
+  gpio_write_bit(GPIOC, 13, HIGH);
+  // add system interrupts here
+  GPS_update();
+  gpio_write_bit(GPIOC, 13, LOW);
+}
+void reset_system()
+{
+  lcd.clear();
+  lcd.print((char *)F("Reseting system"));
+  nvic_sys_reset();
 }
 
 #endif
